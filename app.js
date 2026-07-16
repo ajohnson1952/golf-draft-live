@@ -8,24 +8,144 @@ const teams = {
   Allen:['Ludvig Aberg','Collin Morikawa','Min Woo Lee','Nicolai Hojgaard','Kristoffer Reitan'],
   Sterns:['Chris Gotterup','Justin Rose','Aaron Rai','Alex Fitzpatrick','Tom McKibbin']
 };
-const aliases = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
-let live = {}, overrides = JSON.parse(localStorage.getItem('draftOverrides')||'{}');
-const fmt=s=>s==null?'—':s===0?'E':s>0?`+${s}`:`${s}`;
-function getPlayer(name){const key=aliases(name);const found=Object.values(live).find(p=>aliases(p.name)===key)||{};return {...found,...(overrides[name]||{}),name,score:(overrides[name]?.score ?? found.score ?? null),status:(overrides[name]?.status ?? found.status ?? 'active')};}
-function compute(){return Object.entries(teams).map(([name,names])=>{
- const players=names.map(getPlayer); const survivors=players.filter(p=>!['cut','wd','dq'].includes(p.status));
- let counting;
- if(survivors.length>=4) counting=[...survivors].filter(p=>p.score!=null).sort((a,b)=>a.score-b.score).slice(0,4);
- else {const eliminated=players.filter(p=>['cut','wd','dq'].includes(p.status)&&p.score!=null).sort((a,b)=>a.score-b.score);counting=[...survivors.filter(p=>p.score!=null),...eliminated.slice(0,4-survivors.length)];}
- const total=counting.length===4?counting.reduce((a,p)=>a+p.score,0):null;
- return {name,players,counting,total};
- }).sort((a,b)=>(a.total??999)-(b.total??999));}
-function render(){const standings=compute();document.querySelector('#leaderName').textContent=standings[0].total==null?'Waiting for scores':standings[0].name;document.querySelector('#leaderScore').textContent=fmt(standings[0].total);
- document.querySelector('#teams').innerHTML=standings.map((t,i)=>`<article class="team ${i===0&&t.total!=null?'leader':''}"><div class="teamhead"><div class="rank">${i+1}</div><div class="teamname">${t.name}</div><div class="teamscore">${fmt(t.total)}</div></div><div class="players">${t.players.map(p=>{const count=t.counting.some(c=>c.name===p.name);const cls=[count?'counting':'dropped',['cut','wd','dq'].includes(p.status)?'cut':''].join(' ');return `<div class="player ${cls}"><div><div class="pname">${p.name}</div><div class="meta">${p.status==='active'?(p.thru?`Thru ${p.thru}`:'In play'):p.status.toUpperCase()}${p.round?` · R${p.round}`:''}</div></div><div class="pscore">${fmt(p.score)}</div></div>`}).join('')}</div></article>`).join('');
- renderEditor();}
-function renderEditor(){document.querySelector('#editor').innerHTML=Object.values(teams).flat().map(name=>{const p=getPlayer(name);return `<div class="editrow"><span>${name}</span><input data-name="${name}" type="number" placeholder="Score" value="${overrides[name]?.score??''}"><select data-status="${name}"><option value="active" ${p.status==='active'?'selected':''}>Active</option><option value="cut" ${p.status==='cut'?'selected':''}>Cut</option><option value="wd" ${p.status==='wd'?'selected':''}>WD</option><option value="dq" ${p.status==='dq'?'selected':''}>DQ</option><option value="finished" ${p.status==='finished'?'selected':''}>Finished</option></select></div>`}).join('');
- document.querySelectorAll('input[data-name]').forEach(el=>el.onchange=()=>save(el.dataset.name,el.value,document.querySelector(`[data-status="${el.dataset.name}"]`).value));
- document.querySelectorAll('select[data-status]').forEach(el=>el.onchange=()=>save(el.dataset.status,document.querySelector(`[data-name="${el.dataset.status}"]`).value,el.value));}
-function save(name,score,status){overrides[name]={score:score===''?undefined:Number(score),status};localStorage.setItem('draftOverrides',JSON.stringify(overrides));render();}
-async function refresh(){const st=document.querySelector('#statusText'),dot=document.querySelector('#dot');st.textContent='Refreshing…';try{const r=await fetch('/api/leaderboard');const d=await r.json();if(!r.ok)throw new Error(d.error);live=Object.fromEntries((d.players||[]).map(p=>[aliases(p.name),p]));st.textContent=`Live · ${d.source}`;dot.style.background='var(--accent)';document.querySelector('#updated').textContent=`Updated ${new Date(d.updatedAt).toLocaleTimeString()}`;render();}catch(e){st.textContent='Manual mode · live feed unavailable';dot.style.background='var(--red)';document.querySelector('#updated').textContent=e.message;render();}}
-document.querySelector('#refresh').onclick=refresh;document.querySelector('#clearOverrides').onclick=()=>{overrides={};localStorage.removeItem('draftOverrides');render()};render();refresh();setInterval(refresh,60000);
+
+const COUNTING_PLAYERS = 3;
+const eliminatedStatuses = new Set(['cut','wd','dq']);
+const aliases = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+let live = {};
+let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
+
+const fmt = score => score == null ? '—' : score === 0 ? 'E' : score > 0 ? `+${score}` : `${score}`;
+const scoreSort = (a,b) => (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name);
+
+function getPlayer(name) {
+  const found = live[aliases(name)] || {};
+  const manual = overrides[name] || {};
+  return {
+    ...found,
+    ...manual,
+    name,
+    score: manual.score ?? found.score ?? null,
+    status: manual.status ?? found.status ?? 'active'
+  };
+}
+
+function compute() {
+  return Object.entries(teams).map(([name,names]) => {
+    const players = names.map(getPlayer);
+    const eligible = players.filter(player => !eliminatedStatuses.has(player.status) && player.score != null).sort(scoreSort);
+    let counting;
+
+    if (eligible.length >= COUNTING_PLAYERS) {
+      counting = eligible.slice(0, COUNTING_PLAYERS);
+    } else {
+      const frozen = players
+        .filter(player => eliminatedStatuses.has(player.status) && player.score != null)
+        .sort(scoreSort);
+      counting = [...eligible, ...frozen.slice(0, COUNTING_PLAYERS - eligible.length)];
+    }
+
+    const total = counting.length === COUNTING_PLAYERS
+      ? counting.reduce((sum,player) => sum + player.score, 0)
+      : null;
+
+    return {name, players:[...players].sort(scoreSort), counting, total};
+  }).sort((a,b) => (a.total ?? Number.POSITIVE_INFINITY) - (b.total ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name));
+}
+
+function progressText(player) {
+  if (player.status === 'cut') return 'Missed cut';
+  if (player.status === 'wd') return 'Withdrawn';
+  if (player.status === 'dq') return 'Disqualified';
+  if (player.status === 'finished') return 'Finished';
+  if (player.thru === 'F' || player.thru === 18 || player.thru === '18') return 'Finished round';
+  if (player.thru !== '' && player.thru != null) return `Thru ${player.thru}`;
+  return player.teeTime || 'Not started';
+}
+
+function render() {
+  const standings = compute();
+  const leader = standings[0];
+  document.querySelector('#leaderName').textContent = leader.total == null ? 'Waiting for scores' : leader.name;
+  document.querySelector('#leaderScore').textContent = fmt(leader.total);
+
+  document.querySelector('#teams').innerHTML = standings.map((team,index) => `
+    <article class="team ${index === 0 && team.total != null ? 'leader' : ''}">
+      <div class="teamhead">
+        <div class="rank">${index + 1}</div>
+        <div class="teamname">${team.name}</div>
+        <div class="teamscore">${fmt(team.total)}</div>
+      </div>
+      <div class="players">
+        ${team.players.map(player => {
+          const counts = team.counting.some(counting => counting.name === player.name);
+          const eliminated = eliminatedStatuses.has(player.status);
+          return `<div class="player ${counts ? 'counting' : 'not-counting'} ${eliminated ? 'cut' : ''}">
+            <div class="player-main">
+              <div class="pname">${player.name}</div>
+              <div class="meta">${progressText(player)}${player.round ? ` · R${player.round}` : ''}</div>
+            </div>
+            <div class="player-right">
+              <span class="count-badge ${counts ? 'counts' : ''}">${counts ? 'COUNTS' : 'DROPPED'}</span>
+              <div class="pscore">${fmt(player.score)}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </article>`).join('');
+
+  renderEditor();
+}
+
+function renderEditor() {
+  document.querySelector('#editor').innerHTML = Object.values(teams).flat().map(name => {
+    const player = getPlayer(name);
+    return `<div class="editrow"><span>${name}</span><input data-name="${name}" type="number" placeholder="Score" value="${overrides[name]?.score ?? ''}"><select data-status="${name}"><option value="active" ${player.status === 'active' ? 'selected' : ''}>Active</option><option value="cut" ${player.status === 'cut' ? 'selected' : ''}>Cut</option><option value="wd" ${player.status === 'wd' ? 'selected' : ''}>WD</option><option value="dq" ${player.status === 'dq' ? 'selected' : ''}>DQ</option><option value="finished" ${player.status === 'finished' ? 'selected' : ''}>Finished</option></select></div>`;
+  }).join('');
+
+  document.querySelectorAll('input[data-name]').forEach(element => {
+    element.onchange = () => save(element.dataset.name, element.value, document.querySelector(`[data-status="${element.dataset.name}"]`).value);
+  });
+  document.querySelectorAll('select[data-status]').forEach(element => {
+    element.onchange = () => save(element.dataset.status, document.querySelector(`[data-name="${element.dataset.status}"]`).value, element.value);
+  });
+}
+
+function save(name,score,status) {
+  overrides[name] = {score: score === '' ? undefined : Number(score), status};
+  localStorage.setItem('draftOverrides', JSON.stringify(overrides));
+  render();
+}
+
+async function refresh() {
+  const statusText = document.querySelector('#statusText');
+  const dot = document.querySelector('#dot');
+  statusText.textContent = 'Refreshing…';
+  try {
+    const response = await fetch('/api/leaderboard');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    live = Object.fromEntries((data.players || []).map(player => [aliases(player.name), player]));
+    statusText.textContent = `Live · ${data.source}`;
+    dot.style.background = 'var(--accent)';
+    document.querySelector('#updated').textContent = `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`;
+    if (data.eventName) document.querySelector('#eventName').textContent = data.eventName;
+    render();
+  } catch (error) {
+    statusText.textContent = 'Manual mode · live feed unavailable';
+    dot.style.background = 'var(--red)';
+    document.querySelector('#updated').textContent = error.message;
+    render();
+  }
+}
+
+document.querySelector('#refresh').onclick = refresh;
+document.querySelector('#clearOverrides').onclick = () => {
+  overrides = {};
+  localStorage.removeItem('draftOverrides');
+  render();
+};
+
+render();
+refresh();
+setInterval(refresh, 60000);

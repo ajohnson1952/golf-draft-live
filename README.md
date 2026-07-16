@@ -1,18 +1,24 @@
-# Open Draft Live
+# Caveman PGA Draft Game
 
-A mobile-friendly live leaderboard for the 2026 Open Championship draft.
+A live friends leaderboard for the Caveman PGA Draft Game.
+
+## Scoring
+
+- Five golfers per team.
+- Best three scores relative to par count.
+- After the cut, missed-cut, withdrawn, and disqualified golfers are frozen and no longer eligible unless required to fill a three-player scoring team.
+- Lowest team total wins.
 
 ## Run locally
 
-1. Install Node.js 18 or newer.
-2. Open a terminal in this folder.
-3. Run `npm start`.
-4. Open `http://localhost:3000`.
+```bash
+npm start
+```
 
-The server attempts to pull the tournament leaderboard from ESPN once per minute. Manual score/status overrides are available in the “Score control room” and persist in the browser.
+Open `http://localhost:3000`.
 
-## Deploy
+## Render deployment
 
-Upload this folder to Render, Railway, Fly.io, or another Node host. The start command is `npm start`. No build command is required.
+Push these files to the connected GitHub repository. Render will automatically redeploy.
 
-The default ESPN tournament ID is `401811957`. Override it with the environment variable `ESPN_EVENT_ID` if needed.
+The ESPN tournament is selected with the `ESPN_EVENT_ID` environment variable. The default currently points to event `401811957`.
