@@ -28,4 +28,50 @@ main{padding:28px clamp(20px,5vw,72px) 70px;max-width:1500px;margin:auto}.hero{m
 @media(max-width:650px){.payout-grid{grid-template-columns:1fr}.payout-callout{grid-template-columns:1fr auto}.scorecard-table{min-width:720px}}
 
 /* v8 simplification */
-.compact-payouts{margin-top:34px}.compact-payouts .sectionhead{margin-bottom:10px}.compact-payouts .payout-grid{gap:10px}.compact-payouts .payout-card{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 14px;padding:13px 16px;border-left-width:4px}.compact-payouts .payout-card>span{font-size:10px}.compact-payouts .payout-card>strong{grid-row:1/3;grid-column:2;font-size:24px;margin:0}.compact-payouts .payout-card p{font-size:13px;font-weight:600}.mobile-ticker,.hero{display:none!important}
+.compact-payouts{margin-top:34px}.compact-payouts .sectionhead{margin-bottom:10px}.compact-payouts .payout-grid{gap:10px}.compact-payouts .payout-card{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 14px;padding:13px 16px;border-left-width:4px}.compact-payouts .payout-card>span{font-size:10px}.compact-payouts .payout-card>strong{grid-row:1/3;grid-column:2;font-size:24px;margin:0}.compact-payouts .payout-card p{font-size:13px;font-weight:600}.hero{display:none!important}
+
+
+/* v9 mobile stability and ticker restoration */
+html,body{max-width:100%;overflow-x:hidden}
+.teamgrid,.team,.players,.player,.player-main,.pname{min-width:0}
+.mobile-ticker{display:none}
+@media(max-width:650px){
+  .mobile-ticker{display:block;position:sticky;top:0;z-index:200;padding:9px 12px;background:var(--green-950);color:#fff;text-align:center;font-size:12px;line-height:1.25;border-bottom:1px solid #ffffff33;box-shadow:0 2px 8px #0003}
+  header{padding:22px 16px 18px;gap:16px;border-bottom-width:3px}
+  h1{font-size:42px;line-height:.98;overflow-wrap:anywhere}
+  .sub{font-size:15px}
+  .status{width:100%;justify-content:space-between;gap:8px;font-size:12px}
+  #refresh{padding:8px 13px}
+  main{width:100%;padding:18px 12px 50px}
+  .sectionhead{margin:26px 2px 12px}
+  .sectionhead h3{font-size:23px}
+  .sectionhead span{max-width:48%;font-size:11px}
+  .teamgrid{display:grid;grid-template-columns:minmax(0,1fr);width:100%}
+  .team{width:100%;border-radius:13px}
+  .teamhead{grid-template-columns:34px minmax(0,1fr) auto;padding:14px 13px;gap:5px}
+  .teamname{font-size:19px;overflow-wrap:anywhere}
+  .teamscore{font-size:22px}
+  .players{padding:6px}
+  .player{padding:10px 8px}
+  .pname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px}
+  .meta{white-space:normal}
+  .mover-card{padding:16px}
+  .compact-payouts .payout-card{grid-template-columns:minmax(0,1fr) auto;padding:12px 13px}
+  .manual{padding:15px 13px}
+  #editor{grid-template-columns:minmax(0,1fr)}
+  .editrow{grid-template-columns:minmax(0,1fr) 62px 82px}
+  .modal-panel{width:calc(100% - 16px);margin:8px auto;max-height:calc(100vh - 16px);border-radius:15px;padding:24px 15px}
+  .modal-panel h2{font-size:31px;padding-right:30px;overflow-wrap:anywhere}
+  .detail-score{font-size:58px}
+  .detail-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .detail-grid>div{min-width:0;padding:12px 10px}
+  .detail-grid strong{font-size:17px;overflow-wrap:anywhere}
+  .stats-list>div,.stats-list>button{align-items:flex-start;padding:11px 10px}
+  .stats-list>button span{min-width:0;overflow-wrap:anywhere}
+  .stats-list>button strong{text-align:right;flex:0 0 auto}
+}
+@media(max-width:380px){
+  h1{font-size:36px}
+  .detail-grid{grid-template-columns:1fr}
+  .status #statusText{max-width:60%;white-space:normal}
+}

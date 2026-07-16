@@ -21,7 +21,9 @@ let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}
 let projections = {};
 let coursePars = [];
 
-const fmt = score => score == null ? '—' : score === 0 ? 'E' : score > 0 ? `+${score}` : `${score}`;
+const fmt = score => score == null || score === '' ? '—' : Number(score) === 0 ? 'E' : Number(score) > 0 ? `+${Number(score)}` : `${Number(score)}`;
+const hasValue = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+const todayLabel = player => hasValue(player.today) ? `Today ${fmt(player.today)}` : '';
 const scoreSort = (a,b) => (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name);
 
 function getPlayer(name) {
@@ -104,7 +106,7 @@ function render() {
           const counts = team.counting.some(counting => counting.name === player.name);
           return `<button class="player ${counts ? 'counting' : 'dropped'} ${eliminatedStatuses.has(player.status) ? 'cut' : ''}" data-player="${player.name}">
             <span class="player-main"><span class="pname">${player.name}</span><span class="pscore">${fmt(player.score)}</span></span>
-            <span class="meta">${progressText(player)}${player.round ? ` · R${player.round}` : ''}${player.today != null ? ` · Today ${fmt(player.today)}` : ''}</span>
+            <span class="meta">${progressText(player)}${player.round ? ` · R${player.round}` : ''}${todayLabel(player) ? ` · ${todayLabel(player)}` : ''}</span>
           </button>`;
         }).join('')}
       </div>
@@ -218,7 +220,6 @@ function openTeam(name) {
       <div><span>Team average</span><strong>${average == null ? '—' : average.toFixed(1)}</strong></div>
       <div><span>Holes completed</span><strong>${completedHoles}</strong></div>
     </div>
-    <div class="payout-callout"><span>Winning-team prize</span><strong>$${TEAM_PAYOUT}</strong><small>Paid to the owner of the lowest best-three team total.</small></div>
     <p class="projection-note">Projected finish and win chance are simulation estimates based on current scores, holes remaining and normal scoring volatility. They are for fun, not betting guidance.</p>
     <h3>Team golfers</h3>
     <div class="stats-list">${team.players.map(player => `<button data-modal-player="${player.name}"><span>${player.name}</span><strong>${fmt(player.score)} · ${progressText(player)}</strong></button>`).join('')}</div>
@@ -285,11 +286,15 @@ async function refresh() {
     coursePars = Array.isArray(data.coursePars) ? data.coursePars : [];
     lastUpdated = new Date(data.updatedAt);
     const updatedText = lastUpdated.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    const ticker = document.querySelector('#mobileTicker');
+    if (ticker) ticker.textContent = `Updated ${updatedText} · ${delta} hole${delta === 1 ? '' : 's'} since last refresh`;
     statusText.textContent = `Live · ${data.source}`;
     dot.style.background = 'var(--accent)';
     if (data.eventName) document.querySelector('#eventName').textContent = data.eventName;
     render();
   } catch (error) {
+    const ticker = document.querySelector('#mobileTicker');
+    if (ticker) ticker.textContent = 'Live scores unavailable · showing last saved update';
     statusText.textContent = 'Manual mode · live feed unavailable';
     dot.style.background = 'var(--red)';
     render();

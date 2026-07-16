@@ -10,7 +10,7 @@ const ESPN_EVENT_ID = process.env.ESPN_EVENT_ID || '401811957';
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, {
     'Content-Type': type,
-    'Cache-Control': type.includes('json') ? 'no-store' : 'public, max-age=300'
+    'Cache-Control': (type.includes('json') || type.includes('text/html')) ? 'no-store' : 'public, max-age=60'
   });
   res.end(body);
 }
