@@ -143,6 +143,21 @@ function normalizeEntry(entry, coursePars) {
     ''
   );
 
+  const groupId = String(
+    entry.group?.id ??
+    entry.groupId ??
+    entry.status?.groupId ??
+    entry.pairing?.id ??
+    ''
+  );
+  const groupLabel = String(
+    entry.group?.displayName ??
+    entry.group?.name ??
+    entry.pairing?.displayName ??
+    (teeTime ? `Tee time ${teeTime}` : '')
+  );
+  const groupKey = groupId || (teeTime && round ? `${round}|${teeTime}` : '');
+
   let status = 'active';
   if (/CUT|MC/.test(upperStatus)) status = 'cut';
   else if (/WD|WITHDRAW/.test(upperStatus)) status = 'wd';
@@ -164,6 +179,9 @@ function normalizeEntry(entry, coursePars) {
     status,
     statusText,
     teeTime,
+    groupId,
+    groupKey,
+    groupLabel,
     rounds,
     scorecardUrl: `https://www.espn.com/golf/leaderboard?tournamentId=${ESPN_EVENT_ID}`
   };

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Caveman PGA Draft Game</title>
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 <div id="mobileTicker" class="mobile-ticker" aria-live="polite">Loading live scores…</div>
@@ -28,11 +28,12 @@
       <article class="mover-card hot"><h4>🔥 Hot</h4><div id="hotPlayers"></div></article>
       <article class="mover-card cold"><h4>🥶 Cold</h4><div id="coldPlayers"></div></article>
     </div>
-    <div class="sectionhead movement-head"><h3>Leaderboard movement</h3><span>Change since this device’s first update today</span></div>
-    <div class="movers-grid">
-      <article class="mover-card rising"><h4>▲ Moving up</h4><div id="risingPlayers"></div></article>
-      <article class="mover-card falling"><h4>▼ Moving down</h4><div id="fallingPlayers"></div></article>
-    </div>
+  </section>
+
+
+  <section class="groups-section">
+    <div class="sectionhead"><h3>Groups to watch</h3><span>Drafted golfers playing together right now</span></div>
+    <div id="groupsToWatch" class="watch-grid"></div>
   </section>
 
   <section class="payouts-section compact-payouts">
@@ -61,6 +62,6 @@
     <div id="modalContent"></div>
   </section>
 </div>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

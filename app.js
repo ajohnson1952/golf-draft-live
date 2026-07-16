@@ -20,7 +20,8 @@ let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
 let projections = {};
 let coursePars = [];
-let dailyPositionBaseline = JSON.parse(localStorage.getItem('draftDailyPositionBaseline') || '{}');
+let dailyTeamBaseline = JSON.parse(localStorage.getItem('draftDailyTeamBaseline') || '{}');
+let previousTeamRanks = {};
 
 const fmt = score => score == null || score === '' ? '—' : Number(score) === 0 ? 'E' : Number(score) > 0 ? `+${Number(score)}` : `${Number(score)}`;
 const hasValue = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -92,14 +93,48 @@ function buildProjections(standings) {
   }));
 }
 
+function teamRankMap(standings) {
+  return Object.fromEntries(standings.map((team,index) => [team.name,index+1]));
+}
+
+function updateDailyTeamBaseline(standings) {
+  const todayKey = new Date().toLocaleDateString('en-CA');
+  if (dailyTeamBaseline.date !== todayKey) dailyTeamBaseline = {date:todayKey, positions:{}};
+  dailyTeamBaseline.positions ||= {};
+  standings.forEach((team,index) => {
+    if (dailyTeamBaseline.positions[team.name] == null) dailyTeamBaseline.positions[team.name] = index + 1;
+  });
+  localStorage.setItem('draftDailyTeamBaseline', JSON.stringify(dailyTeamBaseline));
+}
+
+function teamMovement(teamName,currentRank) {
+  const start = dailyTeamBaseline.positions?.[teamName];
+  if (start == null) return {value:0,label:'— No change',className:'same'};
+  const value = start - currentRank;
+  if (value > 0) return {value,label:`▲${value} Today`,className:'up'};
+  if (value < 0) return {value,label:`▼${Math.abs(value)} Today`,className:'down'};
+  return {value:0,label:'— No change',className:'same'};
+}
+
 function render() {
   const standings = compute();
   projections = buildProjections(standings);
-  document.querySelector('#teams').innerHTML = standings.map((team,index) => `
-    <article class="team place-${index+1}">
+  updateDailyTeamBaseline(standings);
+
+  const oldRects = {};
+  document.querySelectorAll('.team[data-team-card]').forEach(card => {
+    oldRects[card.dataset.teamCard] = card.getBoundingClientRect();
+  });
+  const oldRanks = previousTeamRanks;
+  const currentRanks = teamRankMap(standings);
+
+  document.querySelector('#teams').innerHTML = standings.map((team,index) => {
+    const move = teamMovement(team.name,index+1);
+    const rankChanged = oldRanks[team.name] != null && oldRanks[team.name] !== index+1;
+    return `<article class="team place-${index+1} ${rankChanged ? (oldRanks[team.name] > index+1 ? 'rank-up-flash' : 'rank-down-flash') : ''}" data-team-card="${team.name}">
       <button class="teamhead" data-team="${team.name}">
         <div class="rank">${index + 1}</div>
-        <div class="teamname">${team.name}</div>
+        <div class="team-copy"><div class="teamname">${team.name}</div><div class="team-movement ${move.className}">${move.label}</div></div>
         <div class="teamscore">${fmt(team.total)}</div>
       </button>
       <div class="players">
@@ -111,12 +146,31 @@ function render() {
           </button>`;
         }).join('')}
       </div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.team[data-team-card]').forEach(card => {
+      const old = oldRects[card.dataset.teamCard];
+      if (!old) return;
+      const now = card.getBoundingClientRect();
+      const dx = old.left - now.left;
+      const dy = old.top - now.top;
+      if (dx || dy) {
+        card.animate([
+          {transform:`translate(${dx}px, ${dy}px)`},
+          {transform:'translate(0, 0)'}
+        ], {duration:520,easing:'cubic-bezier(.2,.8,.2,1)'});
+      }
+    });
+  });
+  previousTeamRanks = currentRanks;
 
   document.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
   document.querySelectorAll('[data-team]').forEach(el => el.onclick = () => openTeam(el.dataset.team));
   renderPayouts(standings);
   renderMovers();
+  renderGroupsToWatch();
   renderEditor();
 }
 
@@ -177,23 +231,6 @@ function moverCard(player, value, detail) {
   </button>`;
 }
 
-function numericPosition(value) {
-  const match = String(value || '').match(/\d+/);
-  return match ? Number(match[0]) : null;
-}
-
-function updateDailyPositionBaseline(players) {
-  const todayKey = new Date().toLocaleDateString('en-CA');
-  if (dailyPositionBaseline.date !== todayKey) dailyPositionBaseline = {date:todayKey, positions:{}};
-  dailyPositionBaseline.positions ||= {};
-  for (const player of players) {
-    const position = numericPosition(player.position);
-    if (position != null && dailyPositionBaseline.positions[aliases(player.name)] == null) {
-      dailyPositionBaseline.positions[aliases(player.name)] = position;
-    }
-  }
-  localStorage.setItem('draftDailyPositionBaseline', JSON.stringify(dailyPositionBaseline));
-}
 
 function renderMovers() {
   const allPlayers = Object.values(teams).flat().map(getPlayer);
@@ -205,23 +242,36 @@ function renderMovers() {
   document.querySelector('#coldPlayers').innerHTML = sorted.slice(-5).reverse()
     .map(player => moverCard(player, fmt(player.today), `${progressText(player)} · ${player.position || '—'}`)).join('') || '<p class="empty">Round scoring is not available yet.</p>';
 
-  updateDailyPositionBaseline(allPlayers);
-  const movement = allPlayers.map(player => {
-    const current = numericPosition(player.position);
-    const start = dailyPositionBaseline.positions?.[aliases(player.name)];
-    return current != null && start != null ? {...player, movement:start-current} : null;
-  }).filter(Boolean);
-  const risers = movement.filter(player => player.movement > 0).sort((a,b) => b.movement-a.movement).slice(0,5);
-  const fallers = movement.filter(player => player.movement < 0).sort((a,b) => a.movement-b.movement).slice(0,5);
-  const movementRow = player => moverCard(
-    player,
-    player.movement > 0 ? `▲ ${player.movement}` : `▼ ${Math.abs(player.movement)}`,
-    `Started ${dailyPositionBaseline.positions[aliases(player.name)]} · Now ${player.position || '—'}`
-  );
-  document.querySelector('#risingPlayers').innerHTML = risers.map(movementRow).join('') || '<p class="empty">No upward movement recorded on this device yet.</p>';
-  document.querySelector('#fallingPlayers').innerHTML = fallers.map(movementRow).join('') || '<p class="empty">No downward movement recorded on this device yet.</p>';
-
   document.querySelectorAll('.movers-section [data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
+}
+
+function renderGroupsToWatch() {
+  const container = document.querySelector('#groupsToWatch');
+  if (!container) return;
+  const drafted = Object.values(teams).flat().map(getPlayer).filter(player => {
+    const onCourse = player.status === 'active' && player.thru !== '' && player.thru !== 'F' && Number(player.thru) > 0;
+    return onCourse && (player.groupId || player.groupKey);
+  });
+  const groups = new Map();
+  drafted.forEach(player => {
+    const key = player.groupId || player.groupKey;
+    if (!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(player);
+  });
+  const watch = [...groups.values()].filter(group => group.length >= 2)
+    .sort((a,b) => Math.max(...b.map(p=>Number(p.thru)||0)) - Math.max(...a.map(p=>Number(p.thru)||0)));
+
+  if (!watch.length) {
+    container.innerHTML = '<p class="empty">No drafted golfers are currently playing together.</p>';
+    return;
+  }
+  container.innerHTML = watch.map((group,index) => `<article class="watch-group">
+    <div class="watch-group-head"><strong>${group[0].groupLabel || `Group ${index+1}`}</strong><span>Thru ${Math.max(...group.map(p=>Number(p.thru)||0))}</span></div>
+    ${group.sort((a,b)=>(a.score??99)-(b.score??99)).map(player => `<button class="watch-player" data-player="${player.name}">
+      <span><strong>${player.name}</strong><small>${ownerOfGolfer(player.name)} · ${progressText(player)}</small></span><b>${fmt(player.score)}</b>
+    </button>`).join('')}
+  </article>`).join('');
+  container.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
 }
 
 function openPlayer(name) {
