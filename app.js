@@ -21,6 +21,7 @@ let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}
 let projections = {};
 let coursePars = [];
 let previousTeamRanks = {};
+let previousTeamOrder = Object.keys(teams);
 let recentHighlights = JSON.parse(localStorage.getItem('draftRecentHighlights') || '[]');
 let previousLiveSnapshot = JSON.parse(localStorage.getItem('draftPreviousLiveSnapshot') || '{}');
 let previousRefreshStandings = JSON.parse(localStorage.getItem('draftPreviousRefreshStandings') || '{}');
@@ -37,14 +38,21 @@ function getPlayer(name) {
 }
 
 function compute() {
-  return Object.entries(teams).map(([name,names]) => {
+  const priorOrder = new Map(previousTeamOrder.map((name,index) => [name,index]));
+  return Object.entries(teams).map(([name,names],draftIndex) => {
     const players = names.map(getPlayer);
     const eligible = players.filter(player => !eliminatedStatuses.has(player.status) && player.score != null).sort(scoreSort);
     const frozen = players.filter(player => eliminatedStatuses.has(player.status) && player.score != null).sort(scoreSort);
     const counting = eligible.length >= COUNTING_PLAYERS ? eligible.slice(0, COUNTING_PLAYERS) : [...eligible, ...frozen.slice(0, COUNTING_PLAYERS - eligible.length)];
     const total = counting.length === COUNTING_PLAYERS ? counting.reduce((sum,player) => sum + player.score, 0) : null;
-    return {name, players:[...players].sort(scoreSort), counting, total};
-  }).sort((a,b) => (a.total ?? Number.POSITIVE_INFINITY) - (b.total ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name));
+    return {name, players:[...players].sort(scoreSort), counting, total, draftIndex};
+  }).sort((a,b) => {
+    const scoreDifference = (a.total ?? Number.POSITIVE_INFINITY) - (b.total ?? Number.POSITIVE_INFINITY);
+    if (scoreDifference) return scoreDifference;
+    // Preserve the existing screen order while teams are tied. This prevents
+    // tied cards from swapping places on routine data refreshes.
+    return (priorOrder.get(a.name) ?? a.draftIndex) - (priorOrder.get(b.name) ?? b.draftIndex);
+  });
 }
 
 function progressText(player) {
@@ -190,22 +198,32 @@ function render() {
     </article>`;
   }).join('');
 
+  const teamsWithRealRankChanges = new Set(
+    standings
+      .filter(team => oldRanks[team.name] != null && oldRanks[team.name] !== currentRanks[team.name])
+      .map(team => team.name)
+  );
+
   requestAnimationFrame(() => {
     document.querySelectorAll('.team[data-team-card]').forEach(card => {
-      const old = oldRects[card.dataset.teamCard];
+      const teamName = card.dataset.teamCard;
+      // Do not animate routine refresh layout changes. Only animate when the
+      // team's actual competition rank changed since the prior refresh.
+      if (!teamsWithRealRankChanges.has(teamName)) return;
+      const old = oldRects[teamName];
       if (!old) return;
       const now = card.getBoundingClientRect();
       const dx = old.left - now.left;
       const dy = old.top - now.top;
-      if (dx || dy) {
-        card.animate([
-          {transform:`translate(${dx}px, ${dy}px)`},
-          {transform:'translate(0, 0)'}
-        ], {duration:520,easing:'cubic-bezier(.2,.8,.2,1)'});
-      }
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      card.animate([
+        {transform:`translate(${dx}px, ${dy}px)`},
+        {transform:'translate(0, 0)'}
+      ], {duration:320,easing:'cubic-bezier(.22,.75,.25,1)'});
     });
   });
   previousTeamRanks = currentRanks;
+  previousTeamOrder = standings.map(team => team.name);
 
   document.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
   document.querySelectorAll('[data-team]').forEach(el => el.onclick = () => openTeam(el.dataset.team));
