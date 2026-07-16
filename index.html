@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="mobile-ticker" id="mobileTicker">Loading live scores…</div>
 <header>
   <div>
     <p class="eyebrow" id="eventName">CURRENT PGA TOURNAMENT</p>
@@ -18,22 +19,43 @@
 <main>
   <section class="hero">
     <div><span class="label">LEADER</span><h2 id="leaderName">—</h2><div id="leaderScore" class="bigscore">—</div></div>
-    <div class="rules">Each Caveman drafted five golfers. The best three eligible scores count. After the cut, missed-cut golfers are frozen and only count when needed to fill a three-player team.</div>
+    <div class="hero-stats">
+      <div><span class="label">LAST UPDATED</span><strong id="updated">—</strong></div>
+      <div><span class="label">HOLES SINCE LAST REFRESH</span><strong id="holesDelta">0</strong></div>
+    </div>
   </section>
+
   <section>
-    <div class="sectionhead"><h3>Team standings</h3><span id="updated"></span></div>
+    <div class="sectionhead"><h3>Team standings</h3><span>Tap a team or golfer for details</span></div>
     <div id="teams" class="teamgrid"></div>
   </section>
+
+  <section class="movers-section">
+    <div class="sectionhead"><h3>Today’s movers</h3><span>Based on current-round score</span></div>
+    <div class="movers-grid">
+      <article class="mover-card hot"><h4>🔥 Hot</h4><div id="hotPlayers"></div></article>
+      <article class="mover-card cold"><h4>🥶 Cold</h4><div id="coldPlayers"></div></article>
+    </div>
+  </section>
+
   <section class="manual">
     <details>
       <summary>Score control room</summary>
-      <p>Live data refreshes automatically. If the feed is unavailable, enter or correct scores here; overrides are saved in this browser.</p>
+      <p>Live data refreshes automatically. Manual overrides are saved only in this browser.</p>
       <div id="editor"></div>
       <button id="clearOverrides" class="secondary">Clear manual overrides</button>
     </details>
   </section>
 </main>
 <footer>Unofficial Caveman leaderboard · Scores sourced from ESPN when available</footer>
+
+<div id="modal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close-modal></div>
+  <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-close" data-close-modal aria-label="Close">×</button>
+    <div id="modalContent"></div>
+  </section>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

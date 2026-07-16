@@ -1,13 +1,6 @@
 # Caveman PGA Draft Game
 
-A live friends leaderboard for the Caveman PGA Draft Game.
-
-## Scoring
-
-- Five golfers per team.
-- Best three scores relative to par count.
-- After the cut, missed-cut, withdrawn, and disqualified golfers are frozen and no longer eligible unless required to fill a three-player scoring team.
-- Lowest team total wins.
+Live best-three fantasy golf leaderboard for the Cavemen.
 
 ## Run locally
 
@@ -15,10 +8,17 @@ A live friends leaderboard for the Caveman PGA Draft Game.
 npm start
 ```
 
-Open `http://localhost:3000`.
+Open http://localhost:3000.
 
-## Render deployment
+## Deploy
 
-Push these files to the connected GitHub repository. Render will automatically redeploy.
+Upload all files to the GitHub repository connected to Render. Render will redeploy automatically.
 
-The ESPN tournament is selected with the `ESPN_EVENT_ID` environment variable. The default currently points to event `401811957`.
+## New features
+
+- Gold, silver and bronze styling for the top three teams
+- Mobile last-updated ticker
+- Drafted-player holes completed since the prior refresh
+- Clickable golfer details with rounds and available ESPN statistics
+- Clickable team details with team statistics, projected finish and simulated win chance
+- Hot and cold current-round movers
