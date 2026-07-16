@@ -1,24 +1,11 @@
-# Caveman PGA Draft Game
+# Caveman PGA Draft Game v12
 
-Live best-three fantasy golf leaderboard for the Cavemen.
+Live best-three golf draft leaderboard.
 
-## Run locally
+## v12 updates
+- Team movement now compares live standings with the final standings from the previous completed round.
+- Opening-round team cards show a neutral dash because no prior round exists.
+- Added a recent-highlights feed below Groups to Watch for new birdies, bogeys, doubles and team-position changes.
+- Highlights are retained in the browser for the tournament session.
 
-```bash
-npm start
-```
-
-Open http://localhost:3000.
-
-## Deploy
-
-Upload all files to the GitHub repository connected to Render. Render will redeploy automatically.
-
-## New features
-
-- Gold, silver and bronze styling for the top three teams
-- Mobile last-updated ticker
-- Drafted-player holes completed since the prior refresh
-- Clickable golfer details with rounds and available ESPN statistics
-- Clickable team details with team statistics, projected finish and simulated win chance
-- Hot and cold current-round movers
+Run with `npm start`.

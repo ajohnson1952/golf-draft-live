@@ -20,8 +20,10 @@ let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
 let projections = {};
 let coursePars = [];
-let dailyTeamBaseline = JSON.parse(localStorage.getItem('draftDailyTeamBaseline') || '{}');
 let previousTeamRanks = {};
+let recentHighlights = JSON.parse(localStorage.getItem('draftRecentHighlights') || '[]');
+let previousLiveSnapshot = JSON.parse(localStorage.getItem('draftPreviousLiveSnapshot') || '{}');
+let previousRefreshStandings = JSON.parse(localStorage.getItem('draftPreviousRefreshStandings') || '{}');
 
 const fmt = score => score == null || score === '' ? '—' : Number(score) === 0 ? 'E' : Number(score) > 0 ? `+${Number(score)}` : `${Number(score)}`;
 const hasValue = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -93,24 +95,63 @@ function buildProjections(standings) {
   }));
 }
 
-function teamRankMap(standings) {
-  return Object.fromEntries(standings.map((team,index) => [team.name,index+1]));
+function competitionRankMap(standings) {
+  const ranks = {};
+  let lastTotal = null;
+  let lastRank = 0;
+  standings.forEach((team,index) => {
+    const rank = index === 0 || team.total !== lastTotal ? index + 1 : lastRank;
+    ranks[team.name] = rank;
+    lastTotal = team.total;
+    lastRank = rank;
+  });
+  return ranks;
 }
 
-function updateDailyTeamBaseline(standings) {
-  const todayKey = new Date().toLocaleDateString('en-CA');
-  if (dailyTeamBaseline.date !== todayKey) dailyTeamBaseline = {date:todayKey, positions:{}};
-  dailyTeamBaseline.positions ||= {};
-  standings.forEach((team,index) => {
-    if (dailyTeamBaseline.positions[team.name] == null) dailyTeamBaseline.positions[team.name] = index + 1;
-  });
-  localStorage.setItem('draftDailyTeamBaseline', JSON.stringify(dailyTeamBaseline));
+function currentTournamentRound() {
+  const rounds = Object.values(teams).flat().map(getPlayer).map(player => Number(player.round || 0)).filter(Boolean);
+  return rounds.length ? Math.max(...rounds) : 1;
+}
+
+function playerScoreThroughRound(player, throughRound) {
+  if (throughRound < 1) return null;
+  const rounds = Array.isArray(player.rounds) ? player.rounds : [];
+  const completed = rounds.filter(round => Number(round.round) <= throughRound && hasValue(round.score));
+  if (completed.length >= throughRound) return completed.reduce((sum,round) => sum + Number(round.score),0);
+
+  const currentRound = Number(player.round || 0);
+  if (currentRound === throughRound + 1 && hasValue(player.score) && hasValue(player.today)) {
+    return Number(player.score) - Number(player.today);
+  }
+  if (currentRound <= throughRound && hasValue(player.score)) return Number(player.score);
+  return null;
+}
+
+function historicalStandings(throughRound) {
+  if (throughRound < 1) return [];
+  return Object.entries(teams).map(([name,names]) => {
+    const players = names.map(getPlayer).map(player => ({...player, historicalScore:playerScoreThroughRound(player,throughRound)}));
+    let eligible;
+    let frozen = [];
+    if (throughRound >= 2) {
+      eligible = players.filter(player => !eliminatedStatuses.has(player.status) && player.historicalScore != null).sort((a,b)=>a.historicalScore-b.historicalScore);
+      frozen = players.filter(player => eliminatedStatuses.has(player.status) && player.historicalScore != null).sort((a,b)=>a.historicalScore-b.historicalScore);
+    } else {
+      eligible = players.filter(player => player.historicalScore != null).sort((a,b)=>a.historicalScore-b.historicalScore);
+    }
+    const counting = eligible.length >= COUNTING_PLAYERS ? eligible.slice(0,COUNTING_PLAYERS) : [...eligible,...frozen.slice(0,COUNTING_PLAYERS-eligible.length)];
+    const total = counting.length === COUNTING_PLAYERS ? counting.reduce((sum,player)=>sum+player.historicalScore,0) : null;
+    return {name,total};
+  }).sort((a,b)=>(a.total??Number.POSITIVE_INFINITY)-(b.total??Number.POSITIVE_INFINITY)||a.name.localeCompare(b.name));
 }
 
 function teamMovement(teamName,currentRank) {
-  const start = dailyTeamBaseline.positions?.[teamName];
-  if (start == null) return {value:0,label:'— No change',className:'same'};
-  const value = start - currentRank;
+  const round = currentTournamentRound();
+  if (round <= 1) return {value:0,label:'— Opening round',className:'same'};
+  const baseline = historicalStandings(round-1);
+  const priorRank = competitionRankMap(baseline)[teamName];
+  if (priorRank == null || currentRank == null) return {value:0,label:'— No change',className:'same'};
+  const value = priorRank-currentRank;
   if (value > 0) return {value,label:`▲${value} Today`,className:'up'};
   if (value < 0) return {value,label:`▼${Math.abs(value)} Today`,className:'down'};
   return {value:0,label:'— No change',className:'same'};
@@ -119,19 +160,19 @@ function teamMovement(teamName,currentRank) {
 function render() {
   const standings = compute();
   projections = buildProjections(standings);
-  updateDailyTeamBaseline(standings);
 
   const oldRects = {};
   document.querySelectorAll('.team[data-team-card]').forEach(card => {
     oldRects[card.dataset.teamCard] = card.getBoundingClientRect();
   });
   const oldRanks = previousTeamRanks;
-  const currentRanks = teamRankMap(standings);
+  const currentRanks = competitionRankMap(standings);
 
   document.querySelector('#teams').innerHTML = standings.map((team,index) => {
-    const move = teamMovement(team.name,index+1);
-    const rankChanged = oldRanks[team.name] != null && oldRanks[team.name] !== index+1;
-    return `<article class="team place-${index+1} ${rankChanged ? (oldRanks[team.name] > index+1 ? 'rank-up-flash' : 'rank-down-flash') : ''}" data-team-card="${team.name}">
+    const currentRank = currentRanks[team.name];
+    const move = teamMovement(team.name,currentRank);
+    const rankChanged = oldRanks[team.name] != null && oldRanks[team.name] !== currentRank;
+    return `<article class="team place-${index+1} ${rankChanged ? (oldRanks[team.name] > currentRank ? 'rank-up-flash' : 'rank-down-flash') : ''}" data-team-card="${team.name}">
       <button class="teamhead" data-team="${team.name}">
         <div class="rank">${index + 1}</div>
         <div class="team-copy"><div class="teamname">${team.name}</div><div class="team-movement ${move.className}">${move.label}</div></div>
@@ -171,6 +212,7 @@ function render() {
   renderPayouts(standings);
   renderMovers();
   renderGroupsToWatch();
+  renderRecentHighlights();
   renderEditor();
 }
 
@@ -271,6 +313,95 @@ function renderGroupsToWatch() {
       <span><strong>${player.name}</strong><small>${ownerOfGolfer(player.name)} · ${progressText(player)}</small></span><b>${fmt(player.score)}</b>
     </button>`).join('')}
   </article>`).join('');
+  container.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
+}
+
+function ordinal(value) {
+  const number = Number(value);
+  const mod100 = number % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${number}th`;
+  return `${number}${number % 10 === 1 ? 'st' : number % 10 === 2 ? 'nd' : number % 10 === 3 ? 'rd' : 'th'}`;
+}
+
+function highlightIcon(relative) {
+  if (relative <= -2) return '🦅';
+  if (relative === -1) return '🐦';
+  if (relative === 1) return 'Bogey';
+  if (relative >= 2) return 'Double';
+  return 'Par';
+}
+
+function snapshotPlayer(player) {
+  const holes = {};
+  (player.rounds || []).forEach(round => (round.holes || []).forEach(hole => {
+    holes[`${round.round}-${hole.hole}`] = {relative:hole.relative,strokes:hole.strokes,round:round.round,hole:hole.hole};
+  }));
+  return {score:player.score,today:player.today,thru:player.thru,round:player.round,status:player.status,holes};
+}
+
+function addHighlight(text,type='neutral',playerName='') {
+  const duplicate = recentHighlights[0]?.text === text;
+  if (duplicate) return;
+  recentHighlights.unshift({text,type,playerName,time:new Date().toISOString()});
+  recentHighlights = recentHighlights.slice(0,14);
+  localStorage.setItem('draftRecentHighlights',JSON.stringify(recentHighlights));
+}
+
+function collectRecentHighlights(standings) {
+  const drafted = Object.values(teams).flat().map(getPlayer);
+  const hadPrevious = Object.keys(previousLiveSnapshot).length > 0;
+
+  if (hadPrevious) {
+    drafted.forEach(player => {
+      const key = aliases(player.name);
+      const before = previousLiveSnapshot[key];
+      if (!before) return;
+      const now = snapshotPlayer(player);
+      const newHoles = Object.entries(now.holes).filter(([holeKey]) => !before.holes?.[holeKey]).map(([,hole])=>hole).sort((a,b)=>a.round-b.round||a.hole-b.hole);
+      newHoles.forEach(hole => {
+        const relative = Number(hole.relative);
+        if (!Number.isFinite(relative) || relative === 0) return;
+        const result = relative <= -2 ? 'Eagle' : relative === -1 ? 'Birdie' : relative === 1 ? 'Bogey' : relative >= 2 ? 'Double bogey' : '';
+        if (result) addHighlight(`${player.name} makes ${result.toLowerCase()} on ${hole.hole}`,relative<0?'good':'bad',player.name);
+      });
+
+      if (!newHoles.length && Number(player.holesPlayed||0) === Number(before.holesPlayed||0)+1 && hasValue(player.today) && hasValue(before.today)) {
+        const change = Number(player.today)-Number(before.today);
+        if (change !== 0) {
+          const result = change <= -2 ? 'eagle' : change === -1 ? 'birdie' : change === 1 ? 'bogey' : change >= 2 ? 'double bogey' : '';
+          if (result) addHighlight(`${player.name} makes ${result}`,change<0?'good':'bad',player.name);
+        }
+      }
+    });
+
+    const ranks = competitionRankMap(standings);
+    const oldRanks = previousRefreshStandings.ranks || {};
+    Object.entries(ranks).forEach(([team,rank]) => {
+      const oldRank = oldRanks[team];
+      if (oldRank == null || oldRank === rank) return;
+      if (rank === 1) addHighlight(`${team} takes the Caveman lead`,'good');
+      else addHighlight(`${team} moves ${oldRank > rank ? 'up' : 'down'} to ${ordinal(rank)}`,oldRank > rank ? 'good' : 'bad');
+    });
+  }
+
+  previousLiveSnapshot = Object.fromEntries(drafted.map(player => [aliases(player.name), {...snapshotPlayer(player),holesPlayed:Number(player.holesPlayed||0)}]));
+  previousRefreshStandings = {ranks:competitionRankMap(standings),savedAt:new Date().toISOString()};
+  localStorage.setItem('draftPreviousLiveSnapshot',JSON.stringify(previousLiveSnapshot));
+  localStorage.setItem('draftPreviousRefreshStandings',JSON.stringify(previousRefreshStandings));
+}
+
+function renderRecentHighlights() {
+  const container = document.querySelector('#recentHighlights');
+  if (!container) return;
+  if (!recentHighlights.length) {
+    container.innerHTML = '<p class="empty">Highlights will appear as drafted golfers complete holes and teams change places.</p>';
+    return;
+  }
+  container.innerHTML = recentHighlights.slice(0,8).map(item => {
+    const time = new Date(item.time).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    const content = `<span class="highlight-dot ${item.type}"></span><span class="highlight-copy"><strong>${item.text}</strong><small>${time}</small></span>`;
+    return item.playerName ? `<button class="highlight-row" data-player="${item.playerName}">${content}</button>` : `<div class="highlight-row">${content}</div>`;
+  }).join('');
   container.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
 }
 
@@ -390,6 +521,7 @@ async function refresh() {
     statusText.textContent = `Live · ${data.source}`;
     dot.style.background = 'var(--accent)';
     if (data.eventName) document.querySelector('#eventName').textContent = data.eventName;
+    collectRecentHighlights(compute());
     render();
   } catch (error) {
     const ticker = document.querySelector('#mobileTicker');
