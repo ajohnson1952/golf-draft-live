@@ -19,7 +19,9 @@ function normalizeScore(value) {
   if (value == null || value === '') return null;
   const text = String(value).trim().toUpperCase();
   if (text === 'E' || text === 'EVEN') return 0;
-  const number = Number(text.replace('+', ''));
+  const match = text.match(/[+-]?\d+/);
+  if (!match) return null;
+  const number = Number(match[0]);
   return Number.isFinite(number) ? number : null;
 }
 
@@ -38,19 +40,11 @@ function statValue(entry, patterns) {
   return null;
 }
 
-function compactStats(entry) {
-  const stats = Array.isArray(entry.statistics) ? entry.statistics : [];
-  return stats.map(stat => ({
-    label: stat.displayName || stat.shortDisplayName || stat.abbreviation || stat.name || '',
-    value: stat.displayValue ?? stat.value ?? stat.rankDisplayValue ?? ''
-  })).filter(stat => stat.label && stat.value !== '').slice(0, 12);
-}
-
 function parseThru(entry, statusText) {
   const candidates = [
-    entry.status?.displayValue,
     entry.status?.displayThru,
     entry.status?.thru,
+    entry.status?.displayValue,
     entry.status?.hole,
     entry.thru,
     entry.holesCompleted,
@@ -72,41 +66,77 @@ function parseThru(entry, statusText) {
   return '';
 }
 
-function parseRoundScores(entry) {
+function parseHoleList(round, coursePars) {
+  const source = [round?.holes, round?.holeScores, round?.linescores, round?.scores]
+    .find(value => Array.isArray(value) && value.length > 0) || [];
+
+  return source.map((hole, index) => {
+    const number = Number(hole?.hole ?? hole?.number ?? hole?.period ?? index + 1);
+    if (!Number.isFinite(number) || number < 1 || number > 18) return null;
+    const par = Number(hole?.par ?? hole?.shotsToPar ?? coursePars[number - 1]?.par ?? coursePars[number - 1]?.shotsToPar);
+    const strokes = Number(hole?.strokes ?? hole?.score?.value ?? hole?.value ?? hole?.rawScore);
+    const relative = normalizeScore(hole?.toPar ?? hole?.scoreToPar ?? hole?.displayValue);
+    return {
+      hole: number,
+      par: Number.isFinite(par) ? par : null,
+      strokes: Number.isFinite(strokes) ? strokes : null,
+      relative: relative != null ? relative : (Number.isFinite(strokes) && Number.isFinite(par) ? strokes - par : null)
+    };
+  }).filter(Boolean).sort((a, b) => a.hole - b.hole);
+}
+
+function parseRoundScores(entry, coursePars) {
   const sources = [entry.linescores, entry.rounds, entry.scores].find(Array.isArray) || [];
   return sources.map((round, index) => {
-    const value = normalizeScore(
-      round?.score?.displayValue ?? round?.displayValue ?? round?.value ?? round?.toPar
+    const roundNumber = Number(round?.period ?? round?.round ?? round?.number ?? index + 1);
+    const strokes = Number(round?.value ?? round?.strokes ?? round?.score?.value ?? round?.rawScore);
+    const toPar = normalizeScore(
+      round?.displayValue ?? round?.score?.displayValue ?? round?.toPar ?? round?.scoreToPar
     );
-    const strokes = Number(round?.strokes ?? round?.score?.value ?? round?.rawScore);
+    const holes = parseHoleList(round, coursePars);
     return {
-      round: Number(round?.period ?? round?.round ?? round?.number ?? index + 1),
-      score: value,
-      strokes: Number.isFinite(strokes) ? strokes : null
+      round: roundNumber,
+      score: toPar,
+      strokes: Number.isFinite(strokes) ? strokes : null,
+      inScore: Number.isFinite(Number(round?.inScore)) ? Number(round.inScore) : null,
+      outScore: Number.isFinite(Number(round?.outScore)) ? Number(round.outScore) : null,
+      holes
     };
   }).filter(round => round.round >= 1 && round.round <= 4);
 }
 
-function normalizeEntry(entry) {
+function normalizeEntry(entry, coursePars) {
   const athlete = entry.athlete || entry.competitor?.athlete || entry.competitor || entry.player || entry;
   const name = athlete.displayName || athlete.fullName || athlete.name || entry.displayName || entry.fullName;
   if (!name || typeof name !== 'string') return null;
 
-  const rawStatus = entry.status?.type?.description || entry.status?.type?.detail || entry.status?.description || entry.status?.displayValue || entry.status || '';
+  const rawStatus = entry.status?.type?.description || entry.status?.type?.detail || entry.status?.description || entry.status?.detail || entry.status?.displayValue || entry.status || '';
   const statusText = String(rawStatus);
   const upperStatus = statusText.toUpperCase();
   const score = normalizeScore(
-    entry.score?.displayValue ?? entry.score ?? entry.toPar ?? statValue(entry, [/score to par/, /to par/, /^score$/])
+    entry.score?.displayValue ?? entry.toPar ?? statValue(entry, [/score to par/, /to par/, /^score$/])
   );
   const round = Number(entry.status?.period ?? entry.round ?? entry.currentRound ?? 0) || null;
   const thru = parseThru(entry, statusText);
   const teeTime = entry.status?.teeTime || entry.teeTime || '';
-  const rounds = parseRoundScores(entry);
+  const rounds = parseRoundScores(entry, coursePars);
+
+  // ESPN exposes the current-round score in status.todayDetail, such as "-3(F)".
+  // This is more reliable than trying to infer it from the tournament-total score.
   const today = normalizeScore(
-    statValue(entry, [/^today$/, /today score/, /current round/, /round score/]) ??
+    entry.status?.todayDetail ??
+    entry.todayDetail ??
+    statValue(entry, [/^today$/, /today score/, /current round/]) ??
     rounds.find(item => item.round === round)?.score
   );
-  const position = String(entry.order ?? entry.position?.displayValue ?? entry.position ?? statValue(entry, [/^position$/, /^pos$/]) ?? '');
+
+  const position = String(
+    entry.status?.position?.displayName ??
+    entry.position?.displayValue ??
+    entry.position ??
+    (entry.sortOrder ? entry.sortOrder : '') ??
+    ''
+  );
 
   let status = 'active';
   if (/CUT|MC/.test(upperStatus)) status = 'cut';
@@ -130,7 +160,7 @@ function normalizeEntry(entry) {
     statusText,
     teeTime,
     rounds,
-    stats: compactStats(entry)
+    scorecardUrl: `https://www.espn.com/golf/leaderboard?tournamentId=${ESPN_EVENT_ID}`
   };
 }
 
@@ -142,6 +172,16 @@ function findEvent(json) {
 function getCompetition(json) {
   const event = findEvent(json);
   return event?.competitions?.[0] || json.competitions?.[0] || json.leaderboard?.competitions?.[0] || null;
+}
+
+function coursePars(json) {
+  const competition = getCompetition(json);
+  const holes = competition?.courses?.[0]?.holes || [];
+  return holes.map(hole => ({
+    hole: Number(hole.number),
+    par: Number(hole.shotsToPar),
+    yards: Number(hole.totalYards)
+  }));
 }
 
 function extractEntries(json) {
@@ -174,9 +214,17 @@ async function fetchLeaderboard() {
       if (String(selectedEvent.id) !== String(ESPN_EVENT_ID)) {
         throw new Error(`ESPN did not return requested event ${ESPN_EVENT_ID}; received ${selectedEvent.id}.`);
       }
-      const players = extractEntries(json).map(normalizeEntry).filter(Boolean);
+      const pars = coursePars(json);
+      const players = extractEntries(json).map(entry => normalizeEntry(entry, pars)).filter(Boolean);
       if (players.length >= 20) {
-        return { source: 'ESPN', updatedAt: new Date().toISOString(), eventName: eventName(json), players };
+        return {
+          source: 'ESPN',
+          updatedAt: new Date().toISOString(),
+          eventName: eventName(json),
+          course: getCompetition(json)?.courses?.[0]?.name || '',
+          coursePars: pars,
+          players
+        };
       }
       lastError = `Endpoint returned only ${players.length} recognizable players.`;
     } catch (error) {

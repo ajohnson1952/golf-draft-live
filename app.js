@@ -10,6 +10,8 @@ const teams = {
 };
 
 const COUNTING_PLAYERS = 3;
+const TEAM_PAYOUT = 160;
+const GOLFER_PAYOUT = 160;
 const eliminatedStatuses = new Set(['cut','wd','dq']);
 const aliases = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
 let live = {};
@@ -17,6 +19,7 @@ let lastUpdated = null;
 let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
 let projections = {};
+let coursePars = [];
 
 const fmt = score => score == null ? '—' : score === 0 ? 'E' : score > 0 ? `+${score}` : `${score}`;
 const scoreSort = (a,b) => (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name);
@@ -113,8 +116,59 @@ function render() {
 
   document.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
   document.querySelectorAll('[data-team]').forEach(el => el.onclick = () => openTeam(el.dataset.team));
+  renderPayouts(standings);
   renderMovers();
   renderEditor();
+}
+
+
+function ownerOfGolfer(name) {
+  return Object.entries(teams).find(([, players]) => players.includes(name))?.[0] || '—';
+}
+
+function renderPayouts(standings) {
+  const teamLeader = standings[0];
+  const draftedPlayers = Object.values(teams).flat().map(getPlayer).filter(player => player.score != null);
+  const bestScore = draftedPlayers.length ? Math.min(...draftedPlayers.map(player => player.score)) : null;
+  const golferLeaders = bestScore == null ? [] : draftedPlayers.filter(player => player.score === bestScore);
+  const golferText = golferLeaders.length
+    ? golferLeaders.map(player => `${player.name} (${ownerOfGolfer(player.name)})`).join(', ')
+    : 'Waiting for scores';
+
+  document.querySelector('#teamPayoutLeader').textContent = teamLeader?.total == null ? 'Waiting for scores' : `${teamLeader.name} · ${fmt(teamLeader.total)}`;
+  document.querySelector('#golferPayoutLeader').textContent = golferLeaders.length ? `${golferText} · ${fmt(bestScore)}` : golferText;
+}
+
+function scoreClass(relative) {
+  if (relative == null) return '';
+  if (relative <= -2) return 'eagle';
+  if (relative === -1) return 'birdie';
+  if (relative === 1) return 'bogey';
+  if (relative >= 2) return 'double';
+  return 'par';
+}
+
+function renderScorecard(round, fallbackPars = []) {
+  const holes = Array.isArray(round?.holes) ? round.holes : [];
+  if (!holes.length) {
+    return `<div class="round-summary-only">
+      <span>Round ${round.round}</span>
+      <strong>${round.strokes != null ? `${round.strokes} strokes` : fmt(round.score)}</strong>
+      <small>Hole-by-hole data is not included in ESPN’s current feed for this round.</small>
+    </div>`;
+  }
+
+  const byHole = Object.fromEntries(holes.map(hole => [hole.hole, hole]));
+  return `<div class="scorecard-wrap">
+    <div class="scorecard-title"><strong>Round ${round.round}</strong><span>${round.strokes != null ? `${round.strokes} strokes` : fmt(round.score)}</span></div>
+    <div class="scorecard-scroll"><table class="scorecard-table">
+      <thead><tr><th>Hole</th>${Array.from({length:18},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>
+        <tr><th>Par</th>${Array.from({length:18},(_,i)=>`<td>${byHole[i+1]?.par ?? fallbackPars[i]?.par ?? '—'}</td>`).join('')}<td>${fallbackPars.reduce((sum,h)=>sum+(Number(h.par)||0),0)||'—'}</td></tr>
+        <tr><th>Score</th>${Array.from({length:18},(_,i)=>{const h=byHole[i+1]; return `<td class="${scoreClass(h?.relative)}">${h?.strokes ?? '—'}</td>`}).join('')}<td>${round.strokes ?? '—'}</td></tr>
+      </tbody>
+    </table></div>
+  </div>`;
 }
 
 function renderMovers() {
@@ -127,8 +181,8 @@ function renderMovers() {
 
 function openPlayer(name) {
   const player = getPlayer(name);
-  const rounds = player.rounds || [];
-  const stats = player.stats || [];
+  const rounds = (player.rounds || []).filter(round => round.score != null || round.strokes != null || (round.holes || []).length);
+  const owner = ownerOfGolfer(name);
   showModal(`
     <p class="modal-eyebrow">Golfer detail</p>
     <h2 id="modalTitle">${player.name}</h2>
@@ -137,14 +191,12 @@ function openPlayer(name) {
       <div><span>Position</span><strong>${player.position || '—'}</strong></div>
       <div><span>Today</span><strong>${fmt(player.today)}</strong></div>
       <div><span>Progress</span><strong>${progressText(player)}</strong></div>
-      <div><span>Round</span><strong>${player.round || '—'}</strong></div>
+      <div><span>Drafted by</span><strong>${owner}</strong></div>
     </div>
-    <h3>Round-by-round</h3>
-    <div class="round-grid">${[1,2,3,4].map(r => {
-      const found = rounds.find(item => item.round === r);
-      return `<div><span>R${r}</span><strong>${found ? fmt(found.score) : '—'}</strong></div>`;
-    }).join('')}</div>
-    ${stats.length ? `<h3>Available tournament stats</h3><div class="stats-list">${stats.map(stat => `<div><span>${stat.label}</span><strong>${stat.value}</strong></div>`).join('')}</div>` : '<p class="empty">Additional ESPN statistics are not available for this golfer yet.</p>'}
+    <div class="payout-callout"><span>Winning-golfer prize</span><strong>$${GOLFER_PAYOUT}</strong><small>Paid to the person who drafted the tournament champion.</small></div>
+    <h3>Tournament scorecard</h3>
+    <div class="scorecards">${rounds.length ? rounds.map(round => renderScorecard(round, coursePars)).join('') : '<p class="empty">Round details are not available yet.</p>'}</div>
+    ${player.scorecardUrl ? `<a class="external-scorecard" href="${player.scorecardUrl}" target="_blank" rel="noopener">Open ESPN full scorecard</a>` : ''}
   `);
 }
 
@@ -171,6 +223,7 @@ function openTeam(name) {
       <div><span>Team average</span><strong>${average == null ? '—' : average.toFixed(1)}</strong></div>
       <div><span>Holes completed</span><strong>${completedHoles}</strong></div>
     </div>
+    <div class="payout-callout"><span>Winning-team prize</span><strong>$${TEAM_PAYOUT}</strong><small>Paid to the owner of the lowest best-three team total.</small></div>
     <p class="projection-note">Projected finish and win chance are simulation estimates based on current scores, holes remaining and normal scoring volatility. They are for fun, not betting guidance.</p>
     <h3>Team golfers</h3>
     <div class="stats-list">${team.players.map(player => `<button data-modal-player="${player.name}"><span>${player.name}</span><strong>${fmt(player.score)} · ${progressText(player)}</strong></button>`).join('')}</div>
@@ -234,6 +287,7 @@ async function refresh() {
     const drafted = (data.players || []).filter(player => Object.values(teams).flat().some(name => aliases(name) === aliases(player.name)));
     const delta = calculateHoleDelta(drafted);
     live = Object.fromEntries((data.players || []).map(player => [aliases(player.name), player]));
+    coursePars = Array.isArray(data.coursePars) ? data.coursePars : [];
     lastUpdated = new Date(data.updatedAt);
     const updatedText = lastUpdated.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
     statusText.textContent = `Live · ${data.source}`;
