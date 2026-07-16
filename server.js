@@ -18,7 +18,7 @@ function send(res, status, body, type = 'application/json') {
 function normalizeScore(value) {
   if (value == null || value === '') return null;
   const text = String(value).trim().toUpperCase();
-  if (text === 'E' || text === 'EVEN') return 0;
+  if (/^(E|EVEN)(?:$|\s|\(|\[|\-|\/)/.test(text)) return 0;
   const match = text.match(/[+-]?\d+/);
   if (!match) return null;
   const number = Number(match[0]);

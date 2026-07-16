@@ -20,6 +20,7 @@ let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
 let projections = {};
 let coursePars = [];
+let dailyPositionBaseline = JSON.parse(localStorage.getItem('draftDailyPositionBaseline') || '{}');
 
 const fmt = score => score == null || score === '' ? '—' : Number(score) === 0 ? 'E' : Number(score) > 0 ? `+${Number(score)}` : `${Number(score)}`;
 const hasValue = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -169,12 +170,58 @@ function renderScorecard(round, fallbackPars = []) {
   </div>`;
 }
 
+function moverCard(player, value, detail) {
+  return `<button class="mover-player" data-player="${player.name}">
+    <span class="mover-copy"><strong>${player.name}</strong><small>${detail}</small></span>
+    <span class="mover-score">${value}</span>
+  </button>`;
+}
+
+function numericPosition(value) {
+  const match = String(value || '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function updateDailyPositionBaseline(players) {
+  const todayKey = new Date().toLocaleDateString('en-CA');
+  if (dailyPositionBaseline.date !== todayKey) dailyPositionBaseline = {date:todayKey, positions:{}};
+  dailyPositionBaseline.positions ||= {};
+  for (const player of players) {
+    const position = numericPosition(player.position);
+    if (position != null && dailyPositionBaseline.positions[aliases(player.name)] == null) {
+      dailyPositionBaseline.positions[aliases(player.name)] = position;
+    }
+  }
+  localStorage.setItem('draftDailyPositionBaseline', JSON.stringify(dailyPositionBaseline));
+}
+
 function renderMovers() {
-  const players = Object.values(teams).flat().map(getPlayer).filter(player => player.today != null);
-  const sorted = [...players].sort((a,b) => a.today-b.today);
-  const row = player => `<div class="mover-row"><span>${player.name}</span><strong>${fmt(player.today)}</strong></div>`;
-  document.querySelector('#hotPlayers').innerHTML = sorted.slice(0,5).map(row).join('') || '<p class="empty">Round scoring is not available yet.</p>';
-  document.querySelector('#coldPlayers').innerHTML = sorted.slice(-5).reverse().map(row).join('') || '<p class="empty">Round scoring is not available yet.</p>';
+  const allPlayers = Object.values(teams).flat().map(getPlayer);
+  const players = allPlayers.filter(player => hasValue(player.today));
+  const sorted = [...players].sort((a,b) => Number(a.today)-Number(b.today));
+
+  document.querySelector('#hotPlayers').innerHTML = sorted.slice(0,5)
+    .map(player => moverCard(player, fmt(player.today), `${progressText(player)} · ${player.position || '—'}`)).join('') || '<p class="empty">Round scoring is not available yet.</p>';
+  document.querySelector('#coldPlayers').innerHTML = sorted.slice(-5).reverse()
+    .map(player => moverCard(player, fmt(player.today), `${progressText(player)} · ${player.position || '—'}`)).join('') || '<p class="empty">Round scoring is not available yet.</p>';
+
+  updateDailyPositionBaseline(allPlayers);
+  const movement = allPlayers.map(player => {
+    const current = numericPosition(player.position);
+    const start = dailyPositionBaseline.positions?.[aliases(player.name)];
+    return current != null && start != null ? {...player, movement:start-current} : null;
+  }).filter(Boolean);
+  const risers = movement.filter(player => player.movement > 0).sort((a,b) => b.movement-a.movement).slice(0,5);
+  const fallers = movement.filter(player => player.movement < 0).sort((a,b) => a.movement-b.movement).slice(0,5);
+  const movementRow = player => moverCard(
+    player,
+    player.movement > 0 ? `▲ ${player.movement}` : `▼ ${Math.abs(player.movement)}`,
+    `Started ${dailyPositionBaseline.positions[aliases(player.name)]} · Now ${player.position || '—'}`
+  );
+  document.querySelector('#risingPlayers').innerHTML = risers.map(movementRow).join('') || '<p class="empty">No upward movement recorded on this device yet.</p>';
+  document.querySelector('#fallingPlayers').innerHTML = fallers.map(movementRow).join('') || '<p class="empty">No downward movement recorded on this device yet.</p>';
+
+  document.querySelectorAll('.movers-section [data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
 }
 
 function openPlayer(name) {
@@ -204,8 +251,10 @@ function openTeam(name) {
   const playersWithScores = team.players.filter(player => player.score != null);
   const average = playersWithScores.length ? playersWithScores.reduce((sum,p)=>sum+p.score,0)/playersWithScores.length : null;
   const best = playersWithScores.slice().sort(scoreSort)[0];
-  const todayPlayers = team.players.filter(player => player.today != null);
-  const todayTotal = todayPlayers.length ? todayPlayers.sort((a,b)=>a.today-b.today).slice(0,COUNTING_PLAYERS).reduce((sum,p)=>sum+p.today,0) : null;
+  const todayPlayers = team.players.filter(player => hasValue(player.today)).slice().sort((a,b)=>Number(a.today)-Number(b.today));
+  const todayBestThree = todayPlayers.slice(0,COUNTING_PLAYERS);
+  const todayTotal = todayBestThree.length === COUNTING_PLAYERS ? todayBestThree.reduce((sum,p)=>sum+Number(p.today),0) : null;
+  const todayBreakdown = todayBestThree.length ? todayBestThree.map(player => `${player.name.split(' ').slice(-1)[0]} ${fmt(player.today)}`).join(' · ') : 'Waiting for scores';
   const completedHoles = team.players.reduce((sum,p)=>sum+Number(p.holesPlayed||0),0);
 
   showModal(`
@@ -216,7 +265,7 @@ function openTeam(name) {
       <div><span>Projected finish</span><strong>${fmt(projection.projected)}</strong></div>
       <div><span>Chance to win</span><strong>${projection.winChance}%</strong></div>
       <div><span>Best golfer</span><strong>${best ? `${best.name} ${fmt(best.score)}` : '—'}</strong></div>
-      <div><span>Today’s best 3</span><strong>${fmt(todayTotal)}</strong></div>
+      <div><span>Today’s best 3</span><strong>${fmt(todayTotal)}</strong><small class="detail-sub">${todayBreakdown}</small></div>
       <div><span>Team average</span><strong>${average == null ? '—' : average.toFixed(1)}</strong></div>
       <div><span>Holes completed</span><strong>${completedHoles}</strong></div>
     </div>

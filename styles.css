@@ -75,3 +75,16 @@ html,body{max-width:100%;overflow-x:hidden}
   .detail-grid{grid-template-columns:1fr}
   .status #statusText{max-width:60%;white-space:normal}
 }
+
+
+/* v10 score/mover/mobile refinements */
+.mover-player{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 2px;border:0;border-bottom:1px solid var(--line);background:transparent;color:inherit;text-align:left;font-family:inherit;cursor:pointer}
+.mover-player:last-child{border-bottom:0}.mover-player:hover{background:#f3f8f4}.mover-copy{display:flex;min-width:0;flex-direction:column;gap:3px}.mover-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mover-copy small{color:var(--muted);font-size:11px}.mover-score{flex:0 0 auto;font-size:18px;font-weight:700;color:var(--green-900)}
+.mover-card.rising{border-top:5px solid var(--green-700)}.mover-card.falling{border-top:5px solid var(--bronze)}.movement-head{margin-top:24px}.detail-sub{display:block!important;margin-top:5px;color:var(--muted);font-size:11px!important;letter-spacing:0!important;text-transform:none!important;line-height:1.35}
+@media(max-width:650px){
+  .status{justify-content:flex-start!important;text-align:left}
+  .status #statusText{margin-right:auto;text-align:left}
+  .status #refresh{margin-left:auto}
+  .mover-player{padding:10px 0}
+  .mover-copy strong{white-space:normal}
+}
