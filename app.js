@@ -92,10 +92,6 @@ function buildProjections(standings) {
 function render() {
   const standings = compute();
   projections = buildProjections(standings);
-  const leader = standings[0];
-  document.querySelector('#leaderName').textContent = leader.total == null ? 'Waiting for scores' : leader.name;
-  document.querySelector('#leaderScore').textContent = fmt(leader.total);
-
   document.querySelector('#teams').innerHTML = standings.map((team,index) => `
     <article class="team place-${index+1}">
       <button class="teamhead" data-team="${team.name}">
@@ -193,7 +189,6 @@ function openPlayer(name) {
       <div><span>Progress</span><strong>${progressText(player)}</strong></div>
       <div><span>Drafted by</span><strong>${owner}</strong></div>
     </div>
-    <div class="payout-callout"><span>Winning-golfer prize</span><strong>$${GOLFER_PAYOUT}</strong><small>Paid to the person who drafted the tournament champion.</small></div>
     <h3>Tournament scorecard</h3>
     <div class="scorecards">${rounds.length ? rounds.map(round => renderScorecard(round, coursePars)).join('') : '<p class="empty">Round details are not available yet.</p>'}</div>
     ${player.scorecardUrl ? `<a class="external-scorecard" href="${player.scorecardUrl}" target="_blank" rel="noopener">Open ESPN full scorecard</a>` : ''}
@@ -292,16 +287,11 @@ async function refresh() {
     const updatedText = lastUpdated.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
     statusText.textContent = `Live · ${data.source}`;
     dot.style.background = 'var(--accent)';
-    document.querySelector('#updated').textContent = updatedText;
-    document.querySelector('#holesDelta').textContent = delta;
-    document.querySelector('#mobileTicker').textContent = `Updated ${updatedText} · ${delta} drafted-player holes since last refresh`;
     if (data.eventName) document.querySelector('#eventName').textContent = data.eventName;
     render();
   } catch (error) {
     statusText.textContent = 'Manual mode · live feed unavailable';
     dot.style.background = 'var(--red)';
-    document.querySelector('#updated').textContent = 'Feed unavailable';
-    document.querySelector('#mobileTicker').textContent = `Live feed unavailable · ${error.message}`;
     render();
   }
 }

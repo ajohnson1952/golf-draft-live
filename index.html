@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="mobile-ticker" id="mobileTicker">Loading live scores…</div>
 <header>
   <div>
     <p class="eyebrow" id="eventName">CURRENT PGA TOURNAMENT</p>
@@ -17,22 +16,6 @@
   <div class="status"><span id="dot"></span><span id="statusText">Loading live scores…</span><button id="refresh">Refresh</button></div>
 </header>
 <main>
-  <section class="hero">
-    <div><span class="label">LEADER</span><h2 id="leaderName">—</h2><div id="leaderScore" class="bigscore">—</div></div>
-    <div class="hero-stats">
-      <div><span class="label">LAST UPDATED</span><strong id="updated">—</strong></div>
-      <div><span class="label">HOLES SINCE LAST REFRESH</span><strong id="holesDelta">0</strong></div>
-    </div>
-  </section>
-
-  <section class="payouts-section">
-    <div class="sectionhead"><h3>Payout race</h3><span>$320 total prize pool</span></div>
-    <div class="payout-grid">
-      <article class="payout-card"><span>Winning team</span><strong>$160</strong><p id="teamPayoutLeader">Waiting for scores</p></article>
-      <article class="payout-card"><span>Winning golfer pick</span><strong>$160</strong><p id="golferPayoutLeader">Waiting for scores</p></article>
-    </div>
-  </section>
-
   <section>
     <div class="sectionhead"><h3>Team standings</h3><span>Tap a team or golfer for details</span></div>
     <div id="teams" class="teamgrid"></div>
@@ -43,6 +26,14 @@
     <div class="movers-grid">
       <article class="mover-card hot"><h4>🔥 Hot</h4><div id="hotPlayers"></div></article>
       <article class="mover-card cold"><h4>🥶 Cold</h4><div id="coldPlayers"></div></article>
+    </div>
+  </section>
+
+  <section class="payouts-section compact-payouts">
+    <div class="sectionhead"><h3>Payouts</h3><span>$320 total</span></div>
+    <div class="payout-grid">
+      <article class="payout-card"><span>Winning team</span><strong>$160</strong><p id="teamPayoutLeader">Waiting for scores</p></article>
+      <article class="payout-card"><span>Winning golfer pick</span><strong>$160</strong><p id="golferPayoutLeader">Waiting for scores</p></article>
     </div>
   </section>
 

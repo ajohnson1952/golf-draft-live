@@ -113,8 +113,13 @@ function normalizeEntry(entry, coursePars) {
   const rawStatus = entry.status?.type?.description || entry.status?.type?.detail || entry.status?.description || entry.status?.detail || entry.status?.displayValue || entry.status || '';
   const statusText = String(rawStatus);
   const upperStatus = statusText.toUpperCase();
+  // ESPN's entry.score is not consistently the tournament-to-par value.
+  // The scoreToPar statistic is the reliable total used on ESPN's leaderboard.
   const score = normalizeScore(
-    entry.score?.displayValue ?? entry.toPar ?? statValue(entry, [/score to par/, /to par/, /^score$/])
+    statValue(entry, [/^scoretopar$/, /score to par/, /^to par$/]) ??
+    entry.toPar ??
+    entry.score?.displayValue ??
+    entry.score
   );
   const round = Number(entry.status?.period ?? entry.round ?? entry.currentRound ?? 0) || null;
   const thru = parseThru(entry, statusText);
