@@ -21,37 +21,88 @@ function normalizeScore(value) {
 }
 
 function statValue(entry,patterns) {
-  const stats = Array.isArray(entry.statistics) ? entry.statistics : [];
-  for (const stat of stats) {
-    const label = [stat.name,stat.displayName,stat.shortDisplayName,stat.abbreviation,stat.description].filter(Boolean).join(' ').toLowerCase();
-    if (patterns.some(pattern => pattern.test(label))) return stat.displayValue ?? stat.value ?? stat.rankDisplayValue ?? null;
+  const statArrays = [];
+
+  function collect(node,depth=0) {
+    if (!node || typeof node !== 'object' || depth > 5) return;
+    if (Array.isArray(node.statistics)) statArrays.push(node.statistics);
+    if (Array.isArray(node.stats)) statArrays.push(node.stats);
+    for (const value of Object.values(node)) {
+      if (value && typeof value === 'object') collect(value,depth + 1);
+    }
+  }
+
+  collect(entry);
+
+  for (const stats of statArrays) {
+    for (const stat of stats) {
+      const label = [stat.name,stat.displayName,stat.shortDisplayName,stat.abbreviation,stat.description,stat.label]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (patterns.some(pattern => pattern.test(label))) {
+        return stat.displayValue ?? stat.value ?? stat.rankDisplayValue ?? stat.text ?? null;
+      }
+    }
   }
   return null;
 }
 
+function deepValuesForKeys(entry,keys) {
+  const wanted = new Set(keys.map(key => key.toLowerCase()));
+  const values = [];
+  const seen = new Set();
+
+  function walk(node,depth=0) {
+    if (!node || typeof node !== 'object' || depth > 7 || seen.has(node)) return;
+    seen.add(node);
+    for (const [key,value] of Object.entries(node)) {
+      if (wanted.has(key.toLowerCase()) && value != null && value !== '') values.push(value);
+      if (value && typeof value === 'object') walk(value,depth + 1);
+    }
+  }
+
+  walk(entry);
+  return values;
+}
+
 function parseThru(entry,statusText) {
-  const stat = statValue(entry,[/^thru$/, /holes? completed/, /through/]);
-  const candidates = [
-    entry.status?.displayThru,
-    entry.status?.thru,
-    entry.status?.hole,
-    stat,
-    entry.thru,
-    entry.holesCompleted,
-    entry.status?.displayClock,
-    entry.status?.type?.shortDetail
-  ];
+  const stat = statValue(entry,[/^thru$/, /holes? completed/, /through/, /current hole/]);
+  const nested = deepValuesForKeys(entry,[
+    'displayThru','thru','holesCompleted','currentHole','hole','displayHole','through'
+  ]);
+  const textCandidates = deepValuesForKeys(entry,[
+    'shortDetail','detail','description','displayValue','summary','text'
+  ]);
+  const candidates = [stat,...nested,...textCandidates];
+
   for (const value of candidates) {
     if (value == null || value === '') continue;
+    if (typeof value === 'object') continue;
     const text = String(value).trim();
-    if (/^(F|FINAL)$/i.test(text)) return 'F';
-    const match = text.match(/(?:THRU\s*)?(\d{1,2})/i);
-    if (match) {
-      const holes = Number(match[1]);
+    if (/^(F|FINAL|FINISHED|COMPLETE)$/i.test(text)) return 'F';
+
+    const explicit = text.match(/(?:THRU|THROUGH|HOLES?\s+COMPLETED|CURRENT\s+HOLE)\s*[:\-]?\s*(\d{1,2})/i);
+    if (explicit) {
+      const holes = Number(explicit[1]);
       if (holes >= 1 && holes <= 18) return String(holes);
     }
   }
+
   if (/FINAL|COMPLETE|FINISHED/i.test(statusText)) return 'F';
+  return '';
+}
+
+function parseRound(entry) {
+  const direct = deepValuesForKeys(entry,['period','round','currentRound','roundNumber']);
+  for (const value of direct) {
+    const number = Number(value);
+    if (Number.isInteger(number) && number >= 1 && number <= 4) return String(number);
+  }
+
+  if (Array.isArray(entry.linescores) && entry.linescores.length) {
+    const latest = [...entry.linescores].reverse().find(line => line && (line.value != null || line.displayValue != null));
+    if (latest?.period) return String(latest.period);
+    return String(Math.min(entry.linescores.length,4));
+  }
   return '';
 }
 
@@ -69,7 +120,7 @@ function normalizeEntry(entry) {
     entry.toPar ??
     statValue(entry,[/score to par/, /to par/, /^score$/])
   );
-  const round = entry.status?.period ?? entry.round ?? entry.currentRound ?? '';
+  const round = parseRound(entry);
   const thru = parseThru(entry,statusText);
   const teeTime = entry.teeTime || entry.status?.type?.shortDetail || '';
 
