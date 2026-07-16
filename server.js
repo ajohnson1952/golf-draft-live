@@ -31,7 +31,16 @@ function statValue(entry,patterns) {
 
 function parseThru(entry,statusText) {
   const stat = statValue(entry,[/^thru$/, /holes? completed/, /through/]);
-  const candidates = [stat, entry.thru, entry.holesCompleted, entry.status?.displayClock, entry.status?.type?.shortDetail];
+  const candidates = [
+    entry.status?.displayThru,
+    entry.status?.thru,
+    entry.status?.hole,
+    stat,
+    entry.thru,
+    entry.holesCompleted,
+    entry.status?.displayClock,
+    entry.status?.type?.shortDetail
+  ];
   for (const value of candidates) {
     if (value == null || value === '') continue;
     const text = String(value).trim();

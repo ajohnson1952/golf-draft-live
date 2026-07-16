@@ -80,15 +80,12 @@ function render() {
         ${team.players.map(player => {
           const counts = team.counting.some(counting => counting.name === player.name);
           const eliminated = eliminatedStatuses.has(player.status);
-          return `<div class="player ${counts ? 'counting' : 'not-counting'} ${eliminated ? 'cut' : ''}">
-            <div class="player-main">
+          return `<div class="player ${counts ? 'counting' : 'dropped'} ${eliminated ? 'cut' : ''}">
+            <div class="player-topline">
               <div class="pname">${player.name}</div>
-              <div class="meta">${progressText(player)}${player.round ? ` · R${player.round}` : ''}</div>
-            </div>
-            <div class="player-right">
-              <span class="count-badge ${counts ? 'counts' : ''}">${counts ? 'COUNTS' : 'DROPPED'}</span>
               <div class="pscore">${fmt(player.score)}</div>
             </div>
+            <div class="meta">${progressText(player)}${player.round ? ` · R${player.round}` : ''}</div>
           </div>`;
         }).join('')}
       </div>
