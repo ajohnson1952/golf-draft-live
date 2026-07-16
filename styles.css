@@ -97,3 +97,63 @@ html,body{max-width:100%;overflow-x:hidden}
 /* v12 prior-round movement baseline and recent highlights */
 .highlights-feed{background:#fff;border:1px solid var(--line);border-radius:15px;overflow:hidden}.highlight-row{width:100%;display:flex;align-items:center;gap:12px;padding:12px 15px;border:0;border-bottom:1px solid var(--line);background:#fff;color:inherit;text-align:left;font-family:inherit}.highlight-row:last-child{border-bottom:0}button.highlight-row{cursor:pointer}button.highlight-row:hover{background:#f3f8f4}.highlight-dot{width:9px;height:9px;flex:0 0 auto;border-radius:50%;background:#9aa49d}.highlight-dot.good{background:#21824a;box-shadow:0 0 0 4px #dff1e5}.highlight-dot.bad{background:#b64036;box-shadow:0 0 0 4px #f6dfdc}.highlight-copy{display:flex;min-width:0;flex:1;align-items:baseline;justify-content:space-between;gap:14px}.highlight-copy strong{font-size:14px}.highlight-copy small{flex:0 0 auto;color:var(--muted);font-size:11px}
 @media(max-width:650px){.highlight-row{padding:11px 12px}.highlight-copy{align-items:flex-start;flex-direction:column;gap:3px}.highlight-copy strong{font-size:13px}}
+
+/* v13 Open-inspired navy and white theme */
+:root{
+  --green-950:#061a33;
+  --green-900:#0a2342;
+  --green-800:#12365f;
+  --green-700:#1d4d7a;
+  --green-100:#f4f6f9;
+  --white:#ffffff;
+  --ink:#111827;
+  --muted:#667085;
+  --line:#d7dee8;
+  --danger:#a63a35;
+  --accent:#315f8f;
+  --red:#b84a45;
+  --gold:#c9a227;
+  --gold-soft:#fbf5dd;
+}
+body{background:#f4f6f9;color:var(--ink)}
+.mobile-ticker{background:var(--green-950);border-bottom-color:#ffffff2e}
+header{
+  color:#fff;
+  background:linear-gradient(135deg,#061a33 0%,#0a2342 58%,#12365f 100%);
+  border-bottom:4px solid #fff;
+}
+header>div:first-child{position:relative;padding-top:13px}
+header>div:first-child::before{content:'';position:absolute;left:0;top:0;width:74px;height:3px;background:var(--gold)}
+.eyebrow{color:#cbd7e5}.sub{color:#e3eaf2}
+#dot{background:#fff;box-shadow:0 0 10px #fff9}
+#refresh,.secondary{color:var(--green-900)}
+.sectionhead h3{color:var(--green-950)}
+.team{border:1px solid var(--line);box-shadow:0 8px 22px #061a330d}
+.teamhead{background:linear-gradient(135deg,var(--green-950),var(--green-900))}
+.teamhead:hover{filter:none;background:linear-gradient(135deg,#0a2a50,#174978)}
+.rank{color:#c7d4e2}
+/* Only the winner gets podium styling. */
+.place-1{border:3px solid var(--gold);box-shadow:0 10px 28px #c9a22724}
+.place-1 .teamhead{background:linear-gradient(135deg,#725900,#a88616)}
+.place-1 .rank::after{content:' ★';font-size:14px}
+.place-2,.place-3{border:1px solid var(--line)}
+.place-2 .teamhead,.place-3 .teamhead{background:linear-gradient(135deg,var(--green-950),var(--green-900))}
+.player:nth-child(even){background:#f6f8fb}.player:hover,.mover-player:hover,.watch-player:hover,button.highlight-row:hover,.stats-list>button:hover{background:#edf2f7}
+.pscore,.mover-score,.watch-player b{color:var(--green-900)}
+.player-main .pscore,.teamscore,.detail-score{font-variant-numeric:tabular-nums}
+.team-movement.up{color:#168044}.team-movement.down{color:#b43b36}.team-movement.same{color:#7b8491}
+.manual,.mover-card,.watch-group,.highlights-feed,.payout-card,.modal-panel{background:#fff}
+summary,.modal-panel h3,.round-summary-only strong{color:var(--green-900)}
+.modal-backdrop{background:#041326dc}
+.modal-eyebrow{color:var(--green-700)}
+.detail-grid>div,.round-grid>div{background:#f3f6fa}
+.scorecard-title,.watch-group-head{background:var(--green-900)}
+.scorecard-table th{background:#eef3f8}
+.external-scorecard{color:var(--green-800)}
+.payout-card:nth-child(2){border-left-color:var(--green-900)}
+.payout-card>strong{color:var(--green-900)}
+footer{border-top-color:var(--line)}
+@media(max-width:650px){
+  .mobile-ticker{background:#061a33}
+  header>div:first-child::before{width:58px}
+}

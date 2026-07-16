@@ -152,8 +152,8 @@ function teamMovement(teamName,currentRank) {
   const priorRank = competitionRankMap(baseline)[teamName];
   if (priorRank == null || currentRank == null) return {value:0,label:'— No change',className:'same'};
   const value = priorRank-currentRank;
-  if (value > 0) return {value,label:`▲${value} Today`,className:'up'};
-  if (value < 0) return {value,label:`▼${Math.abs(value)} Today`,className:'down'};
+  if (value > 0) return {value,label:`↑ ${value} Today`,className:'up'};
+  if (value < 0) return {value,label:`↓ ${Math.abs(value)} Today`,className:'down'};
   return {value:0,label:'— No change',className:'same'};
 }
 
