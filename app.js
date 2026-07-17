@@ -43,6 +43,21 @@ let previousRefreshStandings = JSON.parse(localStorage.getItem('draftPreviousRef
 const fmt = score => score == null || score === '' ? '—' : Number(score) === 0 ? 'E' : Number(score) > 0 ? `+${Number(score)}` : `${Number(score)}`;
 const hasValue = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 const todayLabel = player => hasValue(player.today) ? `Today ${fmt(player.today)}` : '';
+const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join('').toUpperCase();
+function headshotMarkup(player, size = 'sm') {
+  const src = player?.headshot || '';
+  const label = initials(player?.name);
+  return `<span class="headshot headshot-${size}"><span class="headshot-fallback">${label}</span>${src ? `<img src="${src}" alt="${player.name}" loading="lazy" onerror="this.style.display='none'">` : ''}</span>`;
+}
+function liveProgressBadge(player) {
+  if (player.status === 'cut') return '<span class="status-badge cut-badge">CUT</span>';
+  if (player.status === 'wd') return '<span class="status-badge cut-badge">WD</span>';
+  if (player.status === 'dq') return '<span class="status-badge cut-badge">DQ</span>';
+  if (player.started === false || player.scheduledNotStarted) return `<span class="status-badge tee-badge">🕒 ${player.teeTime || 'Not started'}</span>`;
+  if (player.thru === 'F' || Number(player.thru) === 18) return '<span class="status-badge finished-badge">✓ Finished</span>';
+  if (Number(player.thru) > 0) return `<span class="status-badge live-badge"><i></i> Hole ${player.thru}</span>`;
+  return '<span class="status-badge tee-badge">Not started</span>';
+}
 const scoreSort = (a,b) => (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY) || a.name.localeCompare(b.name);
 
 function getPlayer(name) {
@@ -243,11 +258,41 @@ function render() {
 
   document.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
   document.querySelectorAll('[data-team]').forEach(el => el.onclick = () => openTeam(el.dataset.team));
+  renderFeaturedMatchup(standings);
   renderPayouts(standings);
   renderMovers();
   renderGroupsToWatch();
   renderRecentHighlights();
   renderEditor();
+}
+
+
+function renderFeaturedMatchup(standings) {
+  const container = document.querySelector('#featuredMatchup');
+  if (!container) return;
+  const contenders = standings.filter(team => team.total != null).slice(0,2);
+  if (contenders.length < 2) {
+    container.innerHTML = '<p class="empty">The featured matchup will appear after two teams have complete counting scores.</p>';
+    return;
+  }
+  const [first, second] = contenders;
+  const firstProjection = projections[first.name] || {winChance:50};
+  const secondProjection = projections[second.name] || {winChance:50};
+  const combined = Math.max(1, Number(firstProjection.winChance || 0) + Number(secondProjection.winChance || 0));
+  const firstShare = Math.round(Number(firstProjection.winChance || 0) / combined * 100);
+  const secondShare = 100 - firstShare;
+  const onCourse = team => team.players.filter(player => player.status === 'active' && Number(player.thru) > 0 && player.thru !== 'F').length;
+  const matchupRow = (team, chance, leader=false) => `<button class="matchup-team ${leader ? 'matchup-leader' : ''}" data-team="${team.name}">
+    <span class="matchup-rank">${leader ? '🏆' : '2'}</span>
+    <span class="matchup-copy"><strong>${team.name}</strong><small>${onCourse(team)} golfer${onCourse(team) === 1 ? '' : 's'} on course</small></span>
+    <span class="matchup-total">${fmt(team.total)}</span>
+    <span class="matchup-chance"><b>${chance}%</b><span class="chance-track"><i style="width:${chance}%"></i></span></span>
+  </button>`;
+  container.innerHTML = `<article class="featured-matchup-card">
+    <div class="featured-matchup-head"><div><span class="live-label"><i></i> LIVE</span><strong>Championship Race</strong></div><span>Projected win share between the top two</span></div>
+    <div class="matchup-body">${matchupRow(first,firstShare,true)}${matchupRow(second,secondShare,false)}</div>
+  </article>`;
+  container.querySelectorAll('[data-team]').forEach(el => el.onclick = () => openTeam(el.dataset.team));
 }
 
 
@@ -302,6 +347,7 @@ function renderScorecard(round, fallbackPars = []) {
 
 function moverCard(player, value, detail) {
   return `<button class="mover-player" data-player="${player.name}">
+    ${headshotMarkup(player,'md')}
     <span class="mover-copy"><strong>${player.name}</strong><small>${detail}</small></span>
     <span class="mover-score">${value}</span>
   </button>`;
@@ -344,7 +390,7 @@ function renderGroupsToWatch() {
   container.innerHTML = watch.map((group,index) => `<article class="watch-group">
     <div class="watch-group-head"><strong>${group[0].groupLabel || `Group ${index+1}`}</strong><span>Thru ${Math.max(...group.map(p=>Number(p.thru)||0))}</span></div>
     ${group.sort((a,b)=>(a.score??99)-(b.score??99)).map(player => `<button class="watch-player" data-player="${player.name}">
-      <span><strong>${player.name}</strong><small>${ownerOfGolfer(player.name)} · ${progressText(player)}</small></span><b>${fmt(player.score)}</b>
+      ${headshotMarkup(player,'md')}<span><strong>${player.name}</strong><small>${ownerOfGolfer(player.name)} · ${progressText(player)}</small></span><b>${fmt(player.score)}</b>
     </button>`).join('')}
   </article>`).join('');
   container.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
@@ -445,8 +491,7 @@ function openPlayer(name) {
   const owner = ownerOfGolfer(name);
   showModal(`
     <p class="modal-eyebrow">Golfer detail</p>
-    <h2 id="modalTitle">${player.name}</h2>
-    <div class="detail-score">${fmt(player.score)}</div>
+    <div class="player-modal-hero">${headshotMarkup(player,'xl')}<div><h2 id="modalTitle">${player.name}</h2><div class="player-hero-line"><span class="detail-position">${player.position || '—'}</span><span class="detail-score">${fmt(player.score)}</span></div>${liveProgressBadge(player)}</div></div>
     <div class="detail-grid">
       <div><span>Position</span><strong>${player.position || '—'}</strong></div>
       <div><span>Today</span><strong>${fmt(player.today)}</strong></div>
@@ -486,7 +531,7 @@ function openTeam(name) {
     </div>
     <p class="projection-note">Projected finish and win chance are simulation estimates based on current scores, holes remaining and normal scoring volatility. They are for fun, not betting guidance.</p>
     <h3>Team golfers</h3>
-    <div class="stats-list">${team.players.map(player => `<button data-modal-player="${player.name}"><span>${player.name}</span><strong>${fmt(player.score)} · ${progressText(player)}</strong></button>`).join('')}</div>
+    <div class="stats-list team-golfer-list">${team.players.map(player => `<button data-modal-player="${player.name}">${headshotMarkup(player,'md')}<span class="team-golfer-copy"><b>${player.name}</b><small>${progressText(player)}</small></span><strong>${fmt(player.score)}</strong></button>`).join('')}</div>
   `);
   document.querySelectorAll('[data-modal-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.modalPlayer));
 }

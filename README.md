@@ -27,3 +27,11 @@ All v13 functionality remains included: live ESPN scoring, best-three totals, pr
 
 - Expanded player-name normalization for ESPN names containing non-decomposing special characters. In particular, `Nicolai Højgaard` now correctly matches the drafted `Nicolai Hojgaard`.
 - Added transliteration support for `ø`, `æ`, `å`, `ł`, `ð`, `þ`, and `ß` to make future international-player matching more reliable.
+
+## v18 changes
+- Added ESPN golfer headshots with initials fallbacks.
+- Added headshots to golfer detail, team detail, Hot/Cold, and Groups to Watch.
+- Added live hole, tee-time, finished, and cut status badges.
+- Redesigned the golfer modal around a larger athlete profile header.
+- Added an experimental Featured Matchup card for the top two teams, including projected win share and golfers currently on course.
+- No official tournament logo or R&A artwork is bundled; the site retains its original Caveman branding.

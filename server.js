@@ -205,8 +205,16 @@ function normalizeEntry(entry, coursePars) {
   const thruNumber = thru === 'F' ? 18 : Number(thru || 0);
   const holesPlayed = round ? Math.min(72, Math.max(0, (round - 1) * 18 + thruNumber)) : 0;
 
+  const athleteId = String(athlete.id || entry.id || '');
+  const suppliedHeadshot = athlete.headshot?.href || entry.headshot?.href ||
+    (typeof athlete.headshot === 'string' ? athlete.headshot : '') ||
+    (typeof entry.headshot === 'string' ? entry.headshot : '');
+  const headshot = suppliedHeadshot ||
+    (athleteId ? `https://a.espncdn.com/i/headshots/golf/players/full/${athleteId}.png` : '');
+
   return {
-    id: String(athlete.id || entry.id || ''),
+    id: athleteId,
+    headshot,
     name,
     score,
     today,
