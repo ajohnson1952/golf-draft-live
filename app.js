@@ -59,10 +59,10 @@ function progressText(player) {
   if (player.status === 'cut') return 'Missed cut';
   if (player.status === 'wd') return 'Withdrawn';
   if (player.status === 'dq') return 'Disqualified';
-  if (player.status === 'finished') return 'Finished';
   if (player.thru === 'F' || player.thru === 18 || player.thru === '18') return 'Finished round';
-  if (player.thru !== '' && player.thru != null) return `Thru ${player.thru}`;
-  return player.teeTime || 'Not started';
+  if (player.thru !== '' && player.thru != null && Number(player.thru) > 0) return `Thru ${player.thru}`;
+  if (player.status === 'finished') return 'Finished';
+  return player.teeTime ? `Tee time ${player.teeTime}` : 'Not started';
 }
 
 function normalRandom() {

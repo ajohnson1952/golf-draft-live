@@ -62,8 +62,25 @@ function parseThru(entry, statusText) {
     }
   }
 
-  if (/FINAL|COMPLETE|FINISH/i.test(statusText)) return 'F';
+  const statusType = entry.status?.type || {};
+  const isCompleted = statusType.completed === true || String(statusType.state || '').toLowerCase() === 'post';
+  if (isCompleted && /FINAL|COMPLETE|FINISH/i.test(statusText)) return 'F';
   return '';
+}
+
+
+function formatCentralTeeTime(value) {
+  if (value == null || value === '') return '';
+  const text = String(value).trim();
+  const timestamp = Date.parse(text);
+  if (!Number.isFinite(timestamp)) return text;
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(new Date(timestamp));
 }
 
 function parseHoleList(round, coursePars) {
@@ -123,17 +140,24 @@ function normalizeEntry(entry, coursePars) {
   );
   const round = Number(entry.status?.period ?? entry.round ?? entry.currentRound ?? 0) || null;
   const thru = parseThru(entry, statusText);
-  const teeTime = entry.status?.teeTime || entry.teeTime || '';
+  const rawTeeTime = entry.status?.teeTime || entry.teeTime || '';
+  const teeTime = formatCentralTeeTime(rawTeeTime);
   const rounds = parseRoundScores(entry, coursePars);
 
-  // ESPN exposes the current-round score in status.todayDetail, such as "-3(F)".
-  // This is more reliable than trying to infer it from the tournament-total score.
-  const today = normalizeScore(
+  const statusType = entry.status?.type || {};
+  const statusState = String(statusType.state || '').toLowerCase();
+  const explicitlyCompleted = statusType.completed === true || statusState === 'post';
+  const hasStartedRound = thru === 'F' || Number(thru) > 0 || statusState === 'in';
+
+  // Do not borrow a round-summary score for a golfer who has not teed off yet.
+  // ESPN can expose a current-round number and a generic "Finish" description
+  // before the golfer's scheduled tee time.
+  const today = hasStartedRound || explicitlyCompleted ? normalizeScore(
     entry.status?.todayDetail ??
     entry.todayDetail ??
     statValue(entry, [/^today$/, /today score/, /current round/]) ??
     rounds.find(item => item.round === round)?.score
-  );
+  ) : null;
 
   const position = String(
     entry.status?.position?.displayName ??
@@ -150,19 +174,22 @@ function normalizeEntry(entry, coursePars) {
     entry.pairing?.id ??
     ''
   );
-  const groupLabel = String(
+  const sourceGroupLabel = String(
     entry.group?.displayName ??
     entry.group?.name ??
     entry.pairing?.displayName ??
-    (teeTime ? `Tee time ${teeTime}` : '')
+    ''
   );
-  const groupKey = groupId || (teeTime && round ? `${round}|${teeTime}` : '');
+  const groupLabel = teeTime
+    ? `${sourceGroupLabel ? `${sourceGroupLabel} · ` : ''}Tee time ${teeTime}`
+    : sourceGroupLabel;
+  const groupKey = groupId || (rawTeeTime && round ? `${round}|${rawTeeTime}` : '');
 
   let status = 'active';
   if (/CUT|MC/.test(upperStatus)) status = 'cut';
   else if (/WD|WITHDRAW/.test(upperStatus)) status = 'wd';
   else if (/DQ|DISQUAL/.test(upperStatus)) status = 'dq';
-  else if (/FINAL|COMPLETE|FINISH/.test(upperStatus)) status = 'finished';
+  else if (thru === 'F' || (explicitlyCompleted && /FINAL|COMPLETE|FINISH/i.test(statusText))) status = 'finished';
 
   const thruNumber = thru === 'F' ? 18 : Number(thru || 0);
   const holesPlayed = round ? Math.min(72, Math.max(0, (round - 1) * 18 + thruNumber)) : 0;
@@ -179,6 +206,7 @@ function normalizeEntry(entry, coursePars) {
     status,
     statusText,
     teeTime,
+    rawTeeTime,
     groupId,
     groupKey,
     groupLabel,
