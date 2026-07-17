@@ -139,15 +139,26 @@ function normalizeEntry(entry, coursePars) {
     entry.score
   );
   const round = Number(entry.status?.period ?? entry.round ?? entry.currentRound ?? 0) || null;
-  const thru = parseThru(entry, statusText);
+  let thru = parseThru(entry, statusText);
   const rawTeeTime = entry.status?.teeTime || entry.teeTime || '';
   const teeTime = formatCentralTeeTime(rawTeeTime);
   const rounds = parseRoundScores(entry, coursePars);
 
   const statusType = entry.status?.type || {};
   const statusState = String(statusType.state || '').toLowerCase();
-  const explicitlyCompleted = statusType.completed === true || statusState === 'post';
-  const hasStartedRound = thru === 'F' || Number(thru) > 0 || statusState === 'in';
+  const statusName = String(statusType.name || statusType.description || statusType.detail || '').toLowerCase();
+  const teeTimestamp = Date.parse(String(rawTeeTime || ''));
+  const teeTimeIsFuture = Number.isFinite(teeTimestamp) && teeTimestamp > Date.now() + 60 * 1000;
+  const explicitlyPreRound = statusState === 'pre' || /scheduled|not started|pre-event|pre round/.test(statusName);
+
+  // ESPN sometimes leaves displayThru='F' from the prior round while already
+  // labeling the golfer as being in the next round. A future tee time or an
+  // explicit pre-round state must win over that stale prior-round value.
+  const scheduledNotStarted = explicitlyPreRound || teeTimeIsFuture;
+  if (scheduledNotStarted) thru = '';
+
+  const explicitlyCompleted = !scheduledNotStarted && (statusType.completed === true || statusState === 'post');
+  const hasStartedRound = !scheduledNotStarted && (thru === 'F' || Number(thru) > 0 || statusState === 'in');
 
   // Do not borrow a round-summary score for a golfer who has not teed off yet.
   // ESPN can expose a current-round number and a generic "Finish" description
@@ -205,6 +216,8 @@ function normalizeEntry(entry, coursePars) {
     holesPlayed,
     status,
     statusText,
+    started: hasStartedRound || explicitlyCompleted,
+    scheduledNotStarted,
     teeTime,
     rawTeeTime,
     groupId,

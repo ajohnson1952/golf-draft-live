@@ -59,6 +59,8 @@ function progressText(player) {
   if (player.status === 'cut') return 'Missed cut';
   if (player.status === 'wd') return 'Withdrawn';
   if (player.status === 'dq') return 'Disqualified';
+  // Trust the server's current-round start flag before stale ESPN thru values.
+  if (player.started === false || player.scheduledNotStarted) return player.teeTime ? `Tee time ${player.teeTime}` : 'Not started';
   if (player.thru === 'F' || player.thru === 18 || player.thru === '18') return 'Finished round';
   if (player.thru !== '' && player.thru != null && Number(player.thru) > 0) return `Thru ${player.thru}`;
   if (player.status === 'finished') return 'Finished';

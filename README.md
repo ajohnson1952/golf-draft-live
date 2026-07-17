@@ -16,3 +16,9 @@ All v13 functionality remains included: live ESPN scoring, best-three totals, pr
 - Tee times are converted to America/Chicago and labeled CT/CDT as appropriate.
 - Scheduled golfers no longer appear as finished before starting their round.
 - Current-round scoring is suppressed until the golfer has actually started.
+
+## v16 fix
+
+- A future Central-time tee time or ESPN pre-round state now overrides stale `F`/18-hole values left over from the prior round.
+- Players waiting to tee off show their tee time (or `Not started`) instead of `Finished round`.
+- Added an explicit current-round `started` flag from the server and made the UI prioritize it.
