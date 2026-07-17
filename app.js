@@ -542,6 +542,36 @@ async function fetchPlayerScorecard(player) {
   return result;
 }
 
+function mergeRoundDetails(fallbackRounds = [], detailedRounds = []) {
+  const merged = new Map();
+
+  for (const round of fallbackRounds) {
+    const roundNumber = Number(round?.round);
+    if (!Number.isFinite(roundNumber)) continue;
+    merged.set(roundNumber, { ...round, round: roundNumber });
+  }
+
+  for (const round of detailedRounds) {
+    const roundNumber = Number(round?.round);
+    if (!Number.isFinite(roundNumber)) continue;
+    const fallback = merged.get(roundNumber) || {};
+    const detailedHoles = Array.isArray(round?.holes) ? round.holes : [];
+
+    merged.set(roundNumber, {
+      ...fallback,
+      ...round,
+      round: roundNumber,
+      strokes: round.strokes ?? fallback.strokes ?? null,
+      score: round.score ?? fallback.score ?? null,
+      inScore: round.inScore ?? fallback.inScore ?? null,
+      outScore: round.outScore ?? fallback.outScore ?? null,
+      holes: detailedHoles.length ? detailedHoles : (Array.isArray(fallback.holes) ? fallback.holes : [])
+    });
+  }
+
+  return [...merged.values()].sort((a, b) => a.round - b.round);
+}
+
 async function openPlayer(name) {
   const player = getPlayer(name);
   const owner = ownerOfGolfer(name);
