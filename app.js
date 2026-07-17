@@ -13,7 +13,21 @@ const COUNTING_PLAYERS = 3;
 const TEAM_PAYOUT = 160;
 const GOLFER_PAYOUT = 160;
 const eliminatedStatuses = new Set(['cut','wd','dq']);
-const aliases = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+const aliases = value => String(value || '')
+  .toLowerCase()
+  // Some letters, especially Danish/Norwegian ø, do not decompose under NFD.
+  // Transliterate them before removing accents and punctuation so ESPN's
+  // "Nicolai Højgaard" matches the drafted "Nicolai Hojgaard".
+  .replace(/[øö]/g, 'o')
+  .replace(/æ/g, 'ae')
+  .replace(/å/g, 'a')
+  .replace(/ł/g, 'l')
+  .replace(/ð/g, 'd')
+  .replace(/þ/g, 'th')
+  .replace(/ß/g, 'ss')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z]/g, '');
 let live = {};
 let lastUpdated = null;
 let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');

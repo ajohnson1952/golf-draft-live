@@ -22,3 +22,8 @@ All v13 functionality remains included: live ESPN scoring, best-three totals, pr
 - A future Central-time tee time or ESPN pre-round state now overrides stale `F`/18-hole values left over from the prior round.
 - Players waiting to tee off show their tee time (or `Not started`) instead of `Finished round`.
 - Added an explicit current-round `started` flag from the server and made the UI prioritize it.
+
+## v17 change
+
+- Expanded player-name normalization for ESPN names containing non-decomposing special characters. In particular, `Nicolai Højgaard` now correctly matches the drafted `Nicolai Hojgaard`.
+- Added transliteration support for `ø`, `æ`, `å`, `ł`, `ð`, `þ`, and `ß` to make future international-player matching more reliable.
