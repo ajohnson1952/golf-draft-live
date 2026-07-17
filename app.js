@@ -514,7 +514,7 @@ function renderPlayerModal(player, owner, rounds, state = 'ready', errorMessage 
       <div><span>Progress</span><strong>${progressText(player)}</strong></div>
       <div><span>Drafted by</span><strong>${owner}</strong></div>
     </div>
-    <h3>Hole-by-hole scorecard</h3>
+    <div class="scorecard-section-head"><h3>Hole-by-hole scorecard</h3>${state === 'ready' && rounds.length ? '<small>ESPN live hole data</small>' : ''}</div>
     <div class="scorecards">${scorecardContent}</div>
     ${player.scorecardUrl ? `<a class="external-scorecard" href="${player.scorecardUrl}" target="_blank" rel="noopener">Open ESPN full scorecard</a>` : ''}
   `;
@@ -533,9 +533,13 @@ async function fetchPlayerScorecard(player) {
   const response = await fetch(`/api/player-summary?${params.toString()}`);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Scorecard request failed.');
-  const rounds = Array.isArray(data.rounds) ? data.rounds : [];
-  playerSummaryCache.set(key, rounds);
-  return rounds;
+  const result = {
+    rounds: Array.isArray(data.rounds) ? data.rounds : [],
+    source: data.source || data.diagnostics?.source || '',
+    diagnostics: data.diagnostics || null
+  };
+  playerSummaryCache.set(key, result);
+  return result;
 }
 
 async function openPlayer(name) {
@@ -546,7 +550,8 @@ async function openPlayer(name) {
   showModal(renderPlayerModal(player, owner, fallbackRounds, 'loading'));
 
   try {
-    const detailedRounds = await fetchPlayerScorecard(player);
+    const scorecardResult = await fetchPlayerScorecard(player);
+    const detailedRounds = scorecardResult.rounds;
     if (requestId !== playerModalRequest || !document.querySelector('#modal').classList.contains('open')) return;
     const rounds = mergeRoundDetails(fallbackRounds, detailedRounds)
       .filter(round => round.score != null || round.strokes != null || (round.holes || []).length);

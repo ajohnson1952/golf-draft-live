@@ -388,52 +388,142 @@ async function fetchLeaderboard() {
 }
 
 
-function normalizePlayerSummary(json) {
-  const rounds = Array.isArray(json?.rounds) ? json.rounds : [];
+function normalizeHole(hole, index) {
+  const holeNumber = Number(hole?.period ?? hole?.hole ?? hole?.holeNumber ?? index + 1);
+  const strokes = toFiniteNumber(hole?.value ?? hole?.displayValue ?? hole?.score?.value);
+  const par = toFiniteNumber(hole?.par ?? hole?.shotsToPar);
   return {
+    hole: holeNumber,
+    strokes,
+    par,
+    relative: strokes != null && par != null
+      ? strokes - par
+      : normalizeScore(hole?.scoreType?.displayValue ?? hole?.toPar ?? hole?.scoreToPar),
+    scoreType: hole?.scoreType?.name || hole?.scoreType?.displayName || ''
+  };
+}
+
+function normalizeRound(round, index) {
+  const rawHoles = Array.isArray(round?.linescores)
+    ? round.linescores
+    : Array.isArray(round?.holes)
+      ? round.holes
+      : [];
+  const holes = rawHoles
+    .map(normalizeHole)
+    .filter(hole => Number.isFinite(hole.hole) && hole.hole >= 1 && hole.hole <= 18)
+    .sort((a, b) => a.hole - b.hole);
+
+  return {
+    round: Number(round?.period ?? round?.round ?? index + 1),
+    strokes: toFiniteNumber(round?.value ?? round?.strokes),
+    score: normalizeScore(round?.displayValue ?? round?.toPar ?? round?.scoreToPar),
+    inScore: toFiniteNumber(round?.inScore),
+    outScore: toFiniteNumber(round?.outScore),
+    holes
+  };
+}
+
+function normalizeCoreLinescores(json) {
+  const items = Array.isArray(json?.items) ? json.items : [];
+  const rounds = items
+    .map(normalizeRound)
+    .filter(round => round.round >= 1 && round.round <= 4 && round.holes.length);
+  return {
+    source: 'core-linescores',
+    playerId: '',
+    playerName: '',
+    rounds,
+    diagnostics: {
+      source: 'core-linescores',
+      roundCount: rounds.length,
+      holeCount: rounds.reduce((sum, round) => sum + round.holes.length, 0)
+    }
+  };
+}
+
+function normalizePlayerSummary(json) {
+  const rawRounds = Array.isArray(json?.rounds) ? json.rounds : [];
+  const rounds = rawRounds
+    .map(normalizeRound)
+    .filter(round => round.round >= 1 && round.round <= 4 && round.holes.length);
+  return {
+    source: 'web-player-summary',
     playerId: String(json?.profile?.id || ''),
     playerName: json?.profile?.displayName || '',
-    rounds: rounds.map((round, index) => {
-      const holes = (Array.isArray(round?.linescores) ? round.linescores : []).map((hole, holeIndex) => {
-        const holeNumber = Number(hole?.period ?? hole?.hole ?? holeIndex + 1);
-        const strokes = toFiniteNumber(hole?.value ?? hole?.displayValue);
-        const par = toFiniteNumber(hole?.par);
-        return {
-          hole: holeNumber,
-          strokes,
-          par,
-          relative: strokes != null && par != null ? strokes - par : normalizeScore(hole?.scoreType?.displayValue),
-          scoreType: hole?.scoreType?.name || hole?.scoreType?.displayName || ''
-        };
-      }).filter(hole => hole.hole >= 1 && hole.hole <= 18);
-
-      return {
-        round: Number(round?.period ?? index + 1),
-        strokes: toFiniteNumber(round?.value),
-        score: normalizeScore(round?.displayValue),
-        inScore: toFiniteNumber(round?.inScore),
-        outScore: toFiniteNumber(round?.outScore),
-        holes
-      };
-    }).filter(round => round.round >= 1 && round.round <= 4)
+    rounds,
+    diagnostics: {
+      source: 'web-player-summary',
+      roundCount: rounds.length,
+      holeCount: rounds.reduce((sum, round) => sum + round.holes.length, 0)
+    }
   };
+}
+
+async function fetchJson(endpoint) {
+  const response = await fetch(endpoint, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; CavemanGolfDraft/1.0)',
+      'Accept': 'application/json, text/plain, */*'
+    }
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    const excerpt = text.replace(/\s+/g, ' ').slice(0, 180);
+    throw new Error(`${response.status}${excerpt ? `: ${excerpt}` : ''}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('ESPN returned a non-JSON response.');
+  }
 }
 
 async function fetchPlayerSummary(playerId, season, eventId = ESPN_EVENT_ID, tour = ESPN_TOUR) {
   if (!/^\d+$/.test(String(playerId || ''))) throw new Error('A valid ESPN player ID is required.');
   const safeSeason = /^\d{4}$/.test(String(season || '')) ? String(season) : String(new Date().getFullYear());
   const safeEvent = /^\d+$/.test(String(eventId || '')) ? String(eventId) : ESPN_EVENT_ID;
-  const safeTour = /^(pga|lpga|liv|eur|champions-tour|ntw)$/i.test(String(tour || '')) ? String(tour).toLowerCase() : ESPN_TOUR;
+  const safeTour = /^(pga|lpga|liv|eur|champions-tour|ntw|mens-olympics-golf|womens-olympics-golf|tgl)$/i.test(String(tour || ''))
+    ? String(tour).toLowerCase()
+    : ESPN_TOUR;
   const cacheKey = `${safeTour}|${safeEvent}|${safeSeason}|${playerId}`;
   const cached = playerSummaryCache.get(cacheKey);
   if (cached && Date.now() - cached.savedAt < PLAYER_SUMMARY_CACHE_MS) return cached.data;
 
-  const endpoint = `https://site.web.api.espn.com/apis/site/v2/sports/golf/${safeTour}/leaderboard/${safeEvent}/playersummary?season=${safeSeason}&player=${encodeURIComponent(playerId)}`;
-  const response = await fetch(endpoint, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
-  if (!response.ok) throw new Error(`ESPN player summary returned ${response.status}.`);
-  const data = normalizePlayerSummary(await response.json());
-  playerSummaryCache.set(cacheKey, { savedAt: Date.now(), data });
-  return data;
+  const attempts = [];
+  const endpoints = [
+    {
+      source: 'core-linescores',
+      url: `https://sports.core.api.espn.com/v2/sports/golf/leagues/${safeTour}/events/${safeEvent}/competitions/${safeEvent}/competitors/${encodeURIComponent(playerId)}/linescores?lang=en&region=us&limit=10`,
+      normalize: normalizeCoreLinescores
+    },
+    {
+      source: 'web-player-summary',
+      url: `https://site.web.api.espn.com/apis/site/v2/sports/golf/${safeTour}/leaderboard/${safeEvent}/playersummary?season=${safeSeason}&player=${encodeURIComponent(playerId)}`,
+      normalize: normalizePlayerSummary
+    }
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const json = await fetchJson(endpoint.url);
+      const data = endpoint.normalize(json);
+      if (data.rounds.length && data.diagnostics.holeCount > 0) {
+        data.playerId = data.playerId || String(playerId);
+        data.diagnostics.attempts = attempts;
+        playerSummaryCache.set(cacheKey, { savedAt: Date.now(), data });
+        return data;
+      }
+      attempts.push({ source: endpoint.source, result: 'no-hole-data' });
+    } catch (error) {
+      attempts.push({ source: endpoint.source, result: error.message });
+    }
+  }
+
+  const detail = attempts.map(attempt => `${attempt.source}: ${attempt.result}`).join('; ');
+  const error = new Error(`ESPN did not return hole-by-hole scoring. ${detail}`);
+  error.diagnostics = { attempts };
+  throw error;
 }
 
 const server = http.createServer(async (req, res) => {

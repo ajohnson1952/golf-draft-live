@@ -1,14 +1,20 @@
-# Caveman PGA Draft Game v22
+# Caveman PGA Draft Game v23
 
 ## Changes
 
-- Added an on-demand server proxy for ESPN's golf player-summary endpoint.
-- Golfer modals now fetch per-round, per-hole scores using the golfer's ESPN athlete ID.
-- Hole scores render with traditional golf notation: double circle for eagle or better, circle for birdie, plain for par, square for bogey, and double square for double bogey or worse.
-- Added a short loading state while the detailed scorecard is fetched.
-- Player scorecards are cached in the browser and for 30 seconds on the server.
-- Existing leaderboard round totals remain as a fallback when ESPN's detailed endpoint is unavailable.
-- Updated asset cache versions to v22.
+- Switched the primary hole-by-hole request to ESPN Core API competitor linescores.
+- Kept ESPN Web API player summary as an automatic fallback.
+- Added robust normalization for `items[].period` and `items[].linescores[]`.
+- Added server-side diagnostics identifying which endpoint responded and how many rounds/holes were found.
+- Improved upstream error details to distinguish HTTP failures from valid responses with no hole data.
+- Scorecards are still fetched only when a golfer modal is opened and cached for 30 seconds.
+- Updated browser asset cache versions to v23.
+
+## Endpoint order
+
+1. Core API competitor linescores
+2. Web API player summary
+3. Existing leaderboard round totals in the browser
 
 ## Environment
 

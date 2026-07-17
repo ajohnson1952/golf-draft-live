@@ -201,3 +201,5 @@ footer{border-top-color:var(--line)}
 .scorecard-spinner{width:18px;height:18px;border:2px solid #ccd8e3;border-top-color:var(--green-800);border-radius:50%;animation:scorecard-spin .8s linear infinite;flex:0 0 auto}
 @keyframes scorecard-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.scorecard-spinner{animation:none;border-top-color:#ccd8e3}}
+
+.scorecard-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:22px}.scorecard-section-head h3{margin:0}.scorecard-section-head small{color:var(--muted,#667085);font-size:.75rem}
