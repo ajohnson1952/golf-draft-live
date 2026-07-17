@@ -332,25 +332,13 @@ function golfScoreSymbol(hole, compact = false) {
   return `<span class="golf-score ${type} ${compact ? 'compact' : ''}" title="${label}: ${hole.strokes}">${hole.strokes}</span>`;
 }
 
-function completedHoles(player) {
-  return (player.rounds || []).flatMap(round => (round.holes || []).map(hole => ({...hole, round:round.round})))
-    .filter(hole => hole.strokes != null)
-    .sort((a,b) => Number(a.round)-Number(b.round) || Number(a.hole)-Number(b.hole));
-}
-
-function momentumStrip(player, count = 7) {
-  const holes = completedHoles(player).slice(-count);
-  if (!holes.length) return '<span class="momentum-empty">No completed holes</span>';
-  return `<span class="momentum-strip" aria-label="Last ${holes.length} completed holes">${holes.map(hole => `<span class="momentum-hole"><small>${hole.hole}</small>${golfScoreSymbol(hole,true)}</span>`).join('')}</span>`;
-}
-
 function renderScorecard(round, fallbackPars = []) {
   const holes = Array.isArray(round?.holes) ? round.holes : [];
   if (!holes.length) {
     return `<div class="round-summary-only">
       <span>Round ${round.round}</span>
       <strong>${round.strokes != null ? `${round.strokes} strokes` : fmt(round.score)}</strong>
-      <small>Hole-by-hole data is not included in ESPN’s current feed for this round.</small>
+      <small>ESPN has not supplied hole-by-hole scoring for this round yet. Use the full scorecard link below to view ESPN’s page.</small>
     </div>`;
   }
 
@@ -520,8 +508,7 @@ function openPlayer(name) {
       <div><span>Progress</span><strong>${progressText(player)}</strong></div>
       <div><span>Drafted by</span><strong>${owner}</strong></div>
     </div>
-    <div class="momentum-panel"><div><h3>Recent momentum</h3><small>Last seven completed holes</small></div>${momentumStrip(player)}</div>
-    <h3>Tournament scorecard</h3>
+    <h3>Hole-by-hole scorecard</h3>
     <div class="scorecards">${rounds.length ? rounds.map(round => renderScorecard(round, coursePars)).join('') : '<p class="empty">Round details are not available yet.</p>'}</div>
     ${player.scorecardUrl ? `<a class="external-scorecard" href="${player.scorecardUrl}" target="_blank" rel="noopener">Open ESPN full scorecard</a>` : ''}
   `);
@@ -554,7 +541,7 @@ function openTeam(name) {
     </div>
     <p class="projection-note">Projected finish and win chance are simulation estimates based on current scores, holes remaining and normal scoring volatility. They are for fun, not betting guidance.</p>
     <h3>Team golfers</h3>
-    <div class="stats-list team-golfer-list">${team.players.map(player => `<button data-modal-player="${player.name}">${headshotMarkup(player,'md')}<span class="team-golfer-copy"><b>${player.name}</b><small>${progressText(player)}</small>${momentumStrip(player,5)}</span><strong>${fmt(player.score)}</strong></button>`).join('')}</div>
+    <div class="stats-list team-golfer-list">${team.players.map(player => `<button data-modal-player="${player.name}">${headshotMarkup(player,'md')}<span class="team-golfer-copy"><b>${player.name}</b><small>${progressText(player)}</small></span><strong>${fmt(player.score)}</strong></button>`).join('')}</div>
   `);
   document.querySelectorAll('[data-modal-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.modalPlayer));
 }

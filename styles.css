@@ -177,16 +177,13 @@ footer{border-top-color:var(--line)}
 .golf-score.double{border:2px solid #8d201a;border-radius:1px;box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px #8d201a}
 .golf-score.par{border:0}.golf-score.empty{color:var(--muted);font-weight:500}
 .scorecard-table td{height:43px;background:#fff!important}.scorecard-table td .golf-score{font-size:12px}
-.momentum-panel{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:20px 0;padding:15px 16px;border:1px solid var(--line);border-radius:13px;background:#f7f9fc}.momentum-panel h3{margin:0}.momentum-panel small{color:var(--muted)}
-.momentum-strip{display:flex;align-items:flex-end;gap:7px;max-width:100%;overflow-x:auto;padding:3px}.momentum-hole{display:grid;justify-items:center;gap:3px;flex:0 0 auto}.momentum-hole>small{font-size:9px;color:var(--muted);line-height:1}.momentum-empty{font-size:12px;color:var(--muted)}
-.team-golfer-copy .momentum-strip{margin-top:7px;gap:5px}.team-golfer-copy .momentum-hole>small{display:none}.team-golfer-copy .golf-score.compact{width:18px;height:18px;font-size:9px;border-width:1.5px}
 .tournament-ticker{position:relative;z-index:25;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:stretch;background:#061a33;color:#fff;border-top:1px solid #ffffff1f;border-bottom:1px solid #ffffff2b;overflow:hidden}
 .tournament-ticker-label{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;padding:9px 17px;background:#0a2342;border-right:1px solid #ffffff2b;white-space:nowrap}.tournament-ticker-label span{font-size:11px;font-weight:900;letter-spacing:.16em;color:var(--gold)}.tournament-ticker-label small{font-size:10px;color:#d8e1ec}
 .tournament-ticker-window{overflow:hidden;display:flex;align-items:center}.tournament-ticker-track{display:flex;width:max-content;animation:fullFieldTicker 95s linear infinite;will-change:transform}.tournament-ticker:hover .tournament-ticker-track{animation-play-state:paused}.tournament-ticker-set{display:flex;align-items:center;flex:0 0 auto}
 .tournament-ticker-item{display:grid;grid-template-columns:auto auto auto;align-items:center;column-gap:7px;row-gap:0;padding:8px 18px;border-right:1px solid #ffffff1f;white-space:nowrap;font-size:12px}.tournament-ticker-item>b{color:#aebed0}.tournament-ticker-item>span{font-weight:700}.tournament-ticker-item>strong{color:#fff}.tournament-ticker-item>small{grid-column:2/4;font-size:9px;color:#aebed0}.tournament-ticker-item.drafted{background:#ffffff0b}.tournament-ticker-item.drafted>span{color:#f4cf67}.tournament-ticker-empty{padding:12px 18px;color:#d8e1ec;font-size:12px}
 @keyframes fullFieldTicker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.tournament-ticker-track{animation:none;max-width:100vw;overflow-x:auto}.tournament-ticker-set[aria-hidden="true"]{display:none}}
-@media(max-width:650px){.tournament-ticker{grid-template-columns:1fr}.tournament-ticker-label{display:none}.tournament-ticker-track{animation-duration:115s}.momentum-panel{align-items:flex-start;flex-direction:column}.scorecard-table{min-width:820px}}
+@media(max-width:650px){.tournament-ticker{grid-template-columns:1fr}.tournament-ticker-label{display:none}.tournament-ticker-track{animation-duration:115s}.scorecard-table{min-width:820px}}
 
 /* v20 ticker stability and mobile readability */
 .tournament-ticker-track{animation-duration:180s}

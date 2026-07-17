@@ -1,18 +1,56 @@
-# Caveman PGA Draft Game v20
+# Caveman PGA Draft Game v14
 
-## Fixes
+## Change notes
 
-- Stabilized the full-field ticker during refreshes. Existing ticker content remains visible until a complete replacement is ready.
-- Prevented unchanged ticker data from rebuilding the ticker DOM every minute.
-- Slowed the desktop ticker from 95 seconds to 180 seconds per full pass.
-- Replaced the animated ticker on mobile with a swipeable horizontal leaderboard for readability and touch stability.
-- Removed the duplicate ticker set on mobile, eliminating blank gaps and touch/hover pause issues.
-- Reworked ESPN hole-by-hole parsing to recognize nested `holes`, `holeScores`, `holeByHole`, `scorecard`, `scores`, `linescores`, and `periods` structures.
-- Added safer extraction of hole number, strokes, par, and score relative to par.
-- Added round-vs-hole detection so 18-hole arrays are not mistaken for four round totals.
-- Momentum strips now populate from the normalized completed-hole data used by the traditional scorecards.
-- Updated browser cache versions to v20.
+- Team cards remain still during ordinary score refreshes.
+- A card animates only when that team’s actual competition rank changes.
+- Tied teams retain their existing display order instead of swapping alphabetically on refresh.
+- Genuine rank movement uses a shorter, subtler 320 ms transition.
+- Green/red score flashes still occur only for real moves up or down.
+- Updated browser cache version to v14.
 
-## Deployment
+All v13 functionality remains included: live ESPN scoring, best-three totals, prior-round movement, Groups to Watch, recent highlights, team/golfer details, payouts, and the navy/white theme.
 
-Replace all files in the repository and allow Render to redeploy.
+
+## v15 changes
+- Tee times are converted to America/Chicago and labeled CT/CDT as appropriate.
+- Scheduled golfers no longer appear as finished before starting their round.
+- Current-round scoring is suppressed until the golfer has actually started.
+
+## v16 fix
+
+- A future Central-time tee time or ESPN pre-round state now overrides stale `F`/18-hole values left over from the prior round.
+- Players waiting to tee off show their tee time (or `Not started`) instead of `Finished round`.
+- Added an explicit current-round `started` flag from the server and made the UI prioritize it.
+
+## v17 change
+
+- Expanded player-name normalization for ESPN names containing non-decomposing special characters. In particular, `Nicolai Højgaard` now correctly matches the drafted `Nicolai Hojgaard`.
+- Added transliteration support for `ø`, `æ`, `å`, `ł`, `ð`, `þ`, and `ß` to make future international-player matching more reliable.
+
+## v19 changes
+- Added ESPN golfer headshots with initials fallbacks.
+- Added headshots to golfer detail, team detail, Hot/Cold, and Groups to Watch.
+- Added live hole, tee-time, finished, and cut status badges.
+- Redesigned the golfer modal around a larger athlete profile header.
+- Added an experimental Featured Matchup card for the top two teams, including projected win share and golfers currently on course.
+- No official tournament logo or R&A artwork is bundled; the site retains its original Caveman branding.
+
+
+## v19 changes
+
+- Traditional golf scorecard notation: circle for birdie, double circle for eagle-or-better, square for bogey, and double square for double-or-worse.
+- Recent-momentum strip showing each golfer's last seven completed holes; compact five-hole strip in team details.
+- Full-field live ticker includes the entire ESPN tournament leaderboard, including undrafted golfers. Drafted golfers are subtly highlighted.
+- Ticker pauses on hover and respects reduced-motion accessibility settings.
+- No new card or score-update animations were added.
+
+
+## v21 changes
+
+- Removed Recent Momentum from golfer details and team details.
+- Made the hole-by-hole scorecard the primary scoring detail in the golfer modal.
+- Retained traditional golf scorecard notation: circle for birdie, double circle for eagle or better, square for bogey, and double square for double bogey or worse.
+- Improved the fallback message when ESPN has not supplied hole-by-hole data for a round.
+- Kept the ESPN full scorecard link available for rounds where the public feed only returns round totals.
+- No new animation was added.
