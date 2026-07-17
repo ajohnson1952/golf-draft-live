@@ -6,6 +6,9 @@ const { URL } = require('url');
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const ESPN_EVENT_ID = process.env.ESPN_EVENT_ID || '401811957';
+const ESPN_TOUR = process.env.ESPN_TOUR || 'pga';
+const PLAYER_SUMMARY_CACHE_MS = 30 * 1000;
+const playerSummaryCache = new Map();
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, {
@@ -370,6 +373,9 @@ async function fetchLeaderboard() {
           eventName: eventName(json),
           course: getCompetition(json)?.courses?.[0]?.name || '',
           coursePars: pars,
+          eventId: String(selectedEvent.id),
+          season: Number(selectedEvent.season?.year || selectedEvent.season || new Date().getFullYear()),
+          tour: ESPN_TOUR,
           players
         };
       }
@@ -381,11 +387,75 @@ async function fetchLeaderboard() {
   throw new Error(lastError || 'No live data source responded.');
 }
 
+
+function normalizePlayerSummary(json) {
+  const rounds = Array.isArray(json?.rounds) ? json.rounds : [];
+  return {
+    playerId: String(json?.profile?.id || ''),
+    playerName: json?.profile?.displayName || '',
+    rounds: rounds.map((round, index) => {
+      const holes = (Array.isArray(round?.linescores) ? round.linescores : []).map((hole, holeIndex) => {
+        const holeNumber = Number(hole?.period ?? hole?.hole ?? holeIndex + 1);
+        const strokes = toFiniteNumber(hole?.value ?? hole?.displayValue);
+        const par = toFiniteNumber(hole?.par);
+        return {
+          hole: holeNumber,
+          strokes,
+          par,
+          relative: strokes != null && par != null ? strokes - par : normalizeScore(hole?.scoreType?.displayValue),
+          scoreType: hole?.scoreType?.name || hole?.scoreType?.displayName || ''
+        };
+      }).filter(hole => hole.hole >= 1 && hole.hole <= 18);
+
+      return {
+        round: Number(round?.period ?? index + 1),
+        strokes: toFiniteNumber(round?.value),
+        score: normalizeScore(round?.displayValue),
+        inScore: toFiniteNumber(round?.inScore),
+        outScore: toFiniteNumber(round?.outScore),
+        holes
+      };
+    }).filter(round => round.round >= 1 && round.round <= 4)
+  };
+}
+
+async function fetchPlayerSummary(playerId, season, eventId = ESPN_EVENT_ID, tour = ESPN_TOUR) {
+  if (!/^\d+$/.test(String(playerId || ''))) throw new Error('A valid ESPN player ID is required.');
+  const safeSeason = /^\d{4}$/.test(String(season || '')) ? String(season) : String(new Date().getFullYear());
+  const safeEvent = /^\d+$/.test(String(eventId || '')) ? String(eventId) : ESPN_EVENT_ID;
+  const safeTour = /^(pga|lpga|liv|eur|champions-tour|ntw)$/i.test(String(tour || '')) ? String(tour).toLowerCase() : ESPN_TOUR;
+  const cacheKey = `${safeTour}|${safeEvent}|${safeSeason}|${playerId}`;
+  const cached = playerSummaryCache.get(cacheKey);
+  if (cached && Date.now() - cached.savedAt < PLAYER_SUMMARY_CACHE_MS) return cached.data;
+
+  const endpoint = `https://site.web.api.espn.com/apis/site/v2/sports/golf/${safeTour}/leaderboard/${safeEvent}/playersummary?season=${safeSeason}&player=${encodeURIComponent(playerId)}`;
+  const response = await fetch(endpoint, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+  if (!response.ok) throw new Error(`ESPN player summary returned ${response.status}.`);
+  const data = normalizePlayerSummary(await response.json());
+  playerSummaryCache.set(cacheKey, { savedAt: Date.now(), data });
+  return data;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname === '/api/leaderboard') {
     try { send(res, 200, JSON.stringify(await fetchLeaderboard())); }
     catch (error) { send(res, 502, JSON.stringify({ error: error.message, updatedAt: new Date().toISOString() })); }
+    return;
+  }
+
+  if (url.pathname === '/api/player-summary') {
+    try {
+      const data = await fetchPlayerSummary(
+        url.searchParams.get('player'),
+        url.searchParams.get('season'),
+        url.searchParams.get('eventId'),
+        url.searchParams.get('tour')
+      );
+      send(res, 200, JSON.stringify(data));
+    } catch (error) {
+      send(res, 502, JSON.stringify({ error: error.message }));
+    }
     return;
   }
 

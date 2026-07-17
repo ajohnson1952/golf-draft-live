@@ -1,56 +1,18 @@
-# Caveman PGA Draft Game v14
+# Caveman PGA Draft Game v22
 
-## Change notes
+## Changes
 
-- Team cards remain still during ordinary score refreshes.
-- A card animates only when that team’s actual competition rank changes.
-- Tied teams retain their existing display order instead of swapping alphabetically on refresh.
-- Genuine rank movement uses a shorter, subtler 320 ms transition.
-- Green/red score flashes still occur only for real moves up or down.
-- Updated browser cache version to v14.
+- Added an on-demand server proxy for ESPN's golf player-summary endpoint.
+- Golfer modals now fetch per-round, per-hole scores using the golfer's ESPN athlete ID.
+- Hole scores render with traditional golf notation: double circle for eagle or better, circle for birdie, plain for par, square for bogey, and double square for double bogey or worse.
+- Added a short loading state while the detailed scorecard is fetched.
+- Player scorecards are cached in the browser and for 30 seconds on the server.
+- Existing leaderboard round totals remain as a fallback when ESPN's detailed endpoint is unavailable.
+- Updated asset cache versions to v22.
 
-All v13 functionality remains included: live ESPN scoring, best-three totals, prior-round movement, Groups to Watch, recent highlights, team/golfer details, payouts, and the navy/white theme.
+## Environment
 
+Optional Render environment variables:
 
-## v15 changes
-- Tee times are converted to America/Chicago and labeled CT/CDT as appropriate.
-- Scheduled golfers no longer appear as finished before starting their round.
-- Current-round scoring is suppressed until the golfer has actually started.
-
-## v16 fix
-
-- A future Central-time tee time or ESPN pre-round state now overrides stale `F`/18-hole values left over from the prior round.
-- Players waiting to tee off show their tee time (or `Not started`) instead of `Finished round`.
-- Added an explicit current-round `started` flag from the server and made the UI prioritize it.
-
-## v17 change
-
-- Expanded player-name normalization for ESPN names containing non-decomposing special characters. In particular, `Nicolai Højgaard` now correctly matches the drafted `Nicolai Hojgaard`.
-- Added transliteration support for `ø`, `æ`, `å`, `ł`, `ð`, `þ`, and `ß` to make future international-player matching more reliable.
-
-## v19 changes
-- Added ESPN golfer headshots with initials fallbacks.
-- Added headshots to golfer detail, team detail, Hot/Cold, and Groups to Watch.
-- Added live hole, tee-time, finished, and cut status badges.
-- Redesigned the golfer modal around a larger athlete profile header.
-- Added an experimental Featured Matchup card for the top two teams, including projected win share and golfers currently on course.
-- No official tournament logo or R&A artwork is bundled; the site retains its original Caveman branding.
-
-
-## v19 changes
-
-- Traditional golf scorecard notation: circle for birdie, double circle for eagle-or-better, square for bogey, and double square for double-or-worse.
-- Recent-momentum strip showing each golfer's last seven completed holes; compact five-hole strip in team details.
-- Full-field live ticker includes the entire ESPN tournament leaderboard, including undrafted golfers. Drafted golfers are subtly highlighted.
-- Ticker pauses on hover and respects reduced-motion accessibility settings.
-- No new card or score-update animations were added.
-
-
-## v21 changes
-
-- Removed Recent Momentum from golfer details and team details.
-- Made the hole-by-hole scorecard the primary scoring detail in the golfer modal.
-- Retained traditional golf scorecard notation: circle for birdie, double circle for eagle or better, square for bogey, and double square for double bogey or worse.
-- Improved the fallback message when ESPN has not supplied hole-by-hole data for a round.
-- Kept the ESPN full scorecard link available for rounds where the public feed only returns round totals.
-- No new animation was added.
+- `ESPN_EVENT_ID` (defaults to `401811957`)
+- `ESPN_TOUR` (defaults to `pga`)

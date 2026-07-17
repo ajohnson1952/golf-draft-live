@@ -36,6 +36,9 @@ let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
 let projections = {};
 let coursePars = [];
+let eventMeta = { eventId: '', season: new Date().getFullYear(), tour: 'pga' };
+const playerSummaryCache = new Map();
+let playerModalRequest = 0;
 let previousTeamRanks = {};
 let previousTeamOrder = Object.keys(teams);
 let recentHighlights = JSON.parse(localStorage.getItem('draftRecentHighlights') || '[]');
@@ -495,11 +498,14 @@ function renderRecentHighlights() {
   container.querySelectorAll('[data-player]').forEach(el => el.onclick = () => openPlayer(el.dataset.player));
 }
 
-function openPlayer(name) {
-  const player = getPlayer(name);
-  const rounds = (player.rounds || []).filter(round => round.score != null || round.strokes != null || (round.holes || []).length);
-  const owner = ownerOfGolfer(name);
-  showModal(`
+function renderPlayerModal(player, owner, rounds, state = 'ready', errorMessage = '') {
+  const scorecardContent = state === 'loading'
+    ? '<div class="scorecard-loading"><span class="scorecard-spinner" aria-hidden="true"></span><strong>Loading ESPN hole-by-hole scores…</strong></div>'
+    : rounds.length
+      ? rounds.map(round => renderScorecard(round, coursePars)).join('')
+      : `<div class="round-summary-only"><span>Scorecard unavailable</span><strong>—</strong><small>${errorMessage || 'ESPN has not published hole-by-hole data for this golfer yet.'}</small></div>`;
+
+  return `
     <p class="modal-eyebrow">Golfer detail</p>
     <div class="player-modal-hero">${headshotMarkup(player,'xl')}<div><h2 id="modalTitle">${player.name}</h2><div class="player-hero-line"><span class="detail-position">${player.position || '—'}</span><span class="detail-score">${fmt(player.score)}</span></div>${liveProgressBadge(player)}</div></div>
     <div class="detail-grid">
@@ -509,9 +515,46 @@ function openPlayer(name) {
       <div><span>Drafted by</span><strong>${owner}</strong></div>
     </div>
     <h3>Hole-by-hole scorecard</h3>
-    <div class="scorecards">${rounds.length ? rounds.map(round => renderScorecard(round, coursePars)).join('') : '<p class="empty">Round details are not available yet.</p>'}</div>
+    <div class="scorecards">${scorecardContent}</div>
     ${player.scorecardUrl ? `<a class="external-scorecard" href="${player.scorecardUrl}" target="_blank" rel="noopener">Open ESPN full scorecard</a>` : ''}
-  `);
+  `;
+}
+
+async function fetchPlayerScorecard(player) {
+  if (!player?.id) throw new Error('ESPN player ID is unavailable.');
+  const key = `${eventMeta.tour}|${eventMeta.eventId}|${eventMeta.season}|${player.id}`;
+  if (playerSummaryCache.has(key)) return playerSummaryCache.get(key);
+  const params = new URLSearchParams({
+    player: player.id,
+    season: String(eventMeta.season || new Date().getFullYear()),
+    eventId: String(eventMeta.eventId || ''),
+    tour: eventMeta.tour || 'pga'
+  });
+  const response = await fetch(`/api/player-summary?${params.toString()}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Scorecard request failed.');
+  const rounds = Array.isArray(data.rounds) ? data.rounds : [];
+  playerSummaryCache.set(key, rounds);
+  return rounds;
+}
+
+async function openPlayer(name) {
+  const player = getPlayer(name);
+  const owner = ownerOfGolfer(name);
+  const requestId = ++playerModalRequest;
+  const fallbackRounds = (player.rounds || []).filter(round => round.score != null || round.strokes != null || (round.holes || []).length);
+  showModal(renderPlayerModal(player, owner, fallbackRounds, 'loading'));
+
+  try {
+    const detailedRounds = await fetchPlayerScorecard(player);
+    if (requestId !== playerModalRequest || !document.querySelector('#modal').classList.contains('open')) return;
+    const rounds = mergeRoundDetails(fallbackRounds, detailedRounds)
+      .filter(round => round.score != null || round.strokes != null || (round.holes || []).length);
+    showModal(renderPlayerModal(player, owner, rounds, 'ready'));
+  } catch (error) {
+    if (requestId !== playerModalRequest || !document.querySelector('#modal').classList.contains('open')) return;
+    showModal(renderPlayerModal(player, owner, fallbackRounds, 'ready', error.message));
+  }
 }
 
 function openTeam(name) {
@@ -634,6 +677,11 @@ async function refresh() {
     tournamentPlayers = data.players || [];
     live = Object.fromEntries(tournamentPlayers.map(player => [aliases(player.name), player]));
     coursePars = Array.isArray(data.coursePars) ? data.coursePars : [];
+    eventMeta = {
+      eventId: String(data.eventId || eventMeta.eventId || ''),
+      season: Number(data.season || eventMeta.season || new Date().getFullYear()),
+      tour: data.tour || eventMeta.tour || 'pga'
+    };
     lastUpdated = new Date(data.updatedAt);
     const updatedText = lastUpdated.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
     const ticker = document.querySelector('#mobileTicker');

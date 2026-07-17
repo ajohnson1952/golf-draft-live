@@ -195,3 +195,9 @@ footer{border-top-color:var(--line)}
   .tournament-ticker-set{width:max-content}
   .tournament-ticker-item{padding:9px 14px}
 }
+
+/* v22 on-demand ESPN player-summary scorecards */
+.scorecard-loading{display:flex;align-items:center;gap:12px;padding:18px;border:1px solid var(--line);border-radius:13px;background:#f7faf8;color:var(--green-900)}
+.scorecard-spinner{width:18px;height:18px;border:2px solid #ccd8e3;border-top-color:var(--green-800);border-radius:50%;animation:scorecard-spin .8s linear infinite;flex:0 0 auto}
+@keyframes scorecard-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.scorecard-spinner{animation:none;border-top-color:#ccd8e3}}
