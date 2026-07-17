@@ -187,3 +187,14 @@ footer{border-top-color:var(--line)}
 @keyframes fullFieldTicker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.tournament-ticker-track{animation:none;max-width:100vw;overflow-x:auto}.tournament-ticker-set[aria-hidden="true"]{display:none}}
 @media(max-width:650px){.tournament-ticker{grid-template-columns:1fr}.tournament-ticker-label{display:none}.tournament-ticker-track{animation-duration:115s}.momentum-panel{align-items:flex-start;flex-direction:column}.scorecard-table{min-width:820px}}
+
+/* v20 ticker stability and mobile readability */
+.tournament-ticker-track{animation-duration:180s}
+.tournament-ticker-window{min-width:0}
+.tournament-ticker-track.is-mobile-static{animation:none!important;transform:none!important;width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;touch-action:pan-x}
+@media(max-width:650px){
+  .tournament-ticker-window{overflow:hidden;width:100%}
+  .tournament-ticker-track{animation:none!important;transform:none!important;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x}
+  .tournament-ticker-set{width:max-content}
+  .tournament-ticker-item{padding:9px 14px}
+}

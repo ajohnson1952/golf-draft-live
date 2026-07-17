@@ -83,43 +83,118 @@ function formatCentralTeeTime(value) {
   }).format(new Date(timestamp));
 }
 
-function parseHoleList(round, coursePars) {
-  const source = [round?.holes, round?.holeScores, round?.linescores, round?.scores]
-    .find(value => Array.isArray(value) && value.length > 0) || [];
+function toFiniteNumber(value) {
+  if (value == null || value === '') return null;
+  const match = String(value).match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const number = Number(match[0]);
+  return Number.isFinite(number) ? number : null;
+}
 
-  return source.map((hole, index) => {
-    const number = Number(hole?.hole ?? hole?.number ?? hole?.period ?? index + 1);
+function parseHoleArray(source, coursePars) {
+  if (!Array.isArray(source) || !source.length) return [];
+  const parsed = source.map((hole, index) => {
+    const number = Number(hole?.hole ?? hole?.holeNumber ?? hole?.number ?? hole?.period ?? index + 1);
     if (!Number.isFinite(number) || number < 1 || number > 18) return null;
-    const par = Number(hole?.par ?? hole?.shotsToPar ?? coursePars[number - 1]?.par ?? coursePars[number - 1]?.shotsToPar);
-    const strokes = Number(hole?.strokes ?? hole?.score?.value ?? hole?.value ?? hole?.rawScore);
-    const relative = normalizeScore(hole?.toPar ?? hole?.scoreToPar ?? hole?.displayValue);
+    const par = toFiniteNumber(hole?.par ?? hole?.shotsToPar ?? coursePars[number - 1]?.par ?? coursePars[number - 1]?.shotsToPar);
+    const strokes = toFiniteNumber(
+      hole?.strokes ?? hole?.score?.value ?? hole?.score?.displayValue ?? hole?.value ??
+      hole?.rawScore ?? hole?.displayValue ?? hole?.result?.value
+    );
+    const relative = normalizeScore(hole?.toPar ?? hole?.scoreToPar ?? hole?.relativeToPar ?? hole?.result?.displayValue);
     return {
       hole: number,
-      par: Number.isFinite(par) ? par : null,
-      strokes: Number.isFinite(strokes) ? strokes : null,
-      relative: relative != null ? relative : (Number.isFinite(strokes) && Number.isFinite(par) ? strokes - par : null)
+      par,
+      strokes,
+      relative: relative != null ? relative : (strokes != null && par != null ? strokes - par : null)
     };
-  }).filter(Boolean).sort((a, b) => a.hole - b.hole);
+  }).filter(Boolean);
+
+  const unique = new Map();
+  parsed.forEach(hole => {
+    const existing = unique.get(hole.hole);
+    if (!existing || (existing.strokes == null && hole.strokes != null)) unique.set(hole.hole, hole);
+  });
+  return [...unique.values()].sort((a, b) => a.hole - b.hole);
+}
+
+function findHoleData(node, coursePars, depth = 0) {
+  if (!node || depth > 6) return [];
+  if (Array.isArray(node)) {
+    const direct = parseHoleArray(node, coursePars);
+    const completed = direct.filter(hole => hole.strokes != null);
+    if (completed.length >= 1 && direct.length <= 18) return direct;
+    for (const child of node) {
+      const nested = findHoleData(child, coursePars, depth + 1);
+      if (nested.length) return nested;
+    }
+    return [];
+  }
+  if (typeof node !== 'object') return [];
+
+  const preferredKeys = ['holes', 'holeScores', 'holeByHole', 'scorecard', 'scores', 'linescores', 'periods'];
+  for (const key of preferredKeys) {
+    if (node[key] != null) {
+      const found = findHoleData(node[key], coursePars, depth + 1);
+      if (found.length) return found;
+    }
+  }
+  for (const value of Object.values(node)) {
+    const found = findHoleData(value, coursePars, depth + 1);
+    if (found.length) return found;
+  }
+  return [];
+}
+
+function parseHoleList(round, coursePars) {
+  return findHoleData(round, coursePars);
 }
 
 function parseRoundScores(entry, coursePars) {
-  const sources = [entry.linescores, entry.rounds, entry.scores].find(Array.isArray) || [];
-  return sources.map((round, index) => {
+  const possible = [entry.rounds, entry.roundScores, entry.scorecard?.rounds, entry.linescores, entry.scores]
+    .find(value => Array.isArray(value) && value.length > 0) || [];
+
+  const looksLikeHoleArray = possible.length > 4 && possible.every((item, index) => {
+    const number = Number(item?.hole ?? item?.holeNumber ?? item?.period ?? index + 1);
+    return number >= 1 && number <= 18;
+  });
+
+  if (looksLikeHoleArray) {
+    const roundNumber = Number(entry.status?.period ?? entry.round ?? entry.currentRound ?? 1) || 1;
+    return [{ round: roundNumber, score: null, strokes: null, inScore: null, outScore: null, holes: parseHoleArray(possible, coursePars) }];
+  }
+
+  return possible.map((round, index) => {
     const roundNumber = Number(round?.period ?? round?.round ?? round?.number ?? index + 1);
-    const strokes = Number(round?.value ?? round?.strokes ?? round?.score?.value ?? round?.rawScore);
-    const toPar = normalizeScore(
-      round?.displayValue ?? round?.score?.displayValue ?? round?.toPar ?? round?.scoreToPar
-    );
-    const holes = parseHoleList(round, coursePars);
+    const strokes = toFiniteNumber(round?.value ?? round?.strokes ?? round?.score?.value ?? round?.rawScore);
+    const toPar = normalizeScore(round?.displayValue ?? round?.score?.displayValue ?? round?.toPar ?? round?.scoreToPar);
     return {
       round: roundNumber,
       score: toPar,
-      strokes: Number.isFinite(strokes) ? strokes : null,
-      inScore: Number.isFinite(Number(round?.inScore)) ? Number(round.inScore) : null,
-      outScore: Number.isFinite(Number(round?.outScore)) ? Number(round.outScore) : null,
-      holes
+      strokes,
+      inScore: toFiniteNumber(round?.inScore),
+      outScore: toFiniteNumber(round?.outScore),
+      holes: parseHoleList(round, coursePars)
     };
   }).filter(round => round.round >= 1 && round.round <= 4);
+}
+
+function mergeRoundDetails(primaryRounds, supplementalRounds) {
+  const rounds = new Map();
+  [...(primaryRounds || []), ...(supplementalRounds || [])].forEach(round => {
+    if (!round?.round) return;
+    const existing = rounds.get(round.round) || {};
+    const existingHoles = Array.isArray(existing.holes) ? existing.holes : [];
+    const newHoles = Array.isArray(round.holes) ? round.holes : [];
+    rounds.set(round.round, {
+      ...existing,
+      ...round,
+      score: round.score ?? existing.score ?? null,
+      strokes: round.strokes ?? existing.strokes ?? null,
+      holes: newHoles.filter(h => h.strokes != null).length >= existingHoles.filter(h => h.strokes != null).length ? newHoles : existingHoles
+    });
+  });
+  return [...rounds.values()].sort((a, b) => a.round - b.round);
 }
 
 function normalizeEntry(entry, coursePars) {

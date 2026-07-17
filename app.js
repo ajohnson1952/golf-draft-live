@@ -30,6 +30,7 @@ const aliases = value => String(value || '')
   .replace(/[^a-z]/g, '');
 let live = {};
 let tournamentPlayers = [];
+let tournamentTickerSignature = '';
 let lastUpdated = null;
 let overrides = JSON.parse(localStorage.getItem('draftOverrides') || '{}');
 let previousHoles = JSON.parse(localStorage.getItem('draftPreviousHoles') || '{}');
@@ -598,17 +599,25 @@ function renderTournamentTicker() {
       const bp = Number(String(b.position || '').replace(/\D/g,''));
       return (Number.isFinite(ap) && ap ? ap : 999) - (Number.isFinite(bp) && bp ? bp : 999) || Number(a.score)-Number(b.score);
     });
-  if (!players.length) {
-    track.innerHTML = '<span class="tournament-ticker-empty">Tournament leaderboard is loading…</span>';
-    return;
-  }
+
+  // Keep the prior ticker visible while a refresh is in flight or a response is incomplete.
+  if (!players.length) return;
+
+  const signature = players.map(player => `${player.id || player.name}|${player.position}|${player.score}|${player.thru}|${player.teeTime}`).join('~');
+  if (signature === tournamentTickerSignature) return;
+  tournamentTickerSignature = signature;
+
   const items = players.map(player => {
     const drafted = Object.values(teams).flat().some(name => aliases(name) === aliases(player.name));
     const status = player.started === false || player.scheduledNotStarted ? (player.teeTime || 'Not started') : player.thru === 'F' ? 'F' : player.thru ? `Thru ${player.thru}` : '';
     return `<span class="tournament-ticker-item ${drafted ? 'drafted' : ''}"><b>${player.position || '—'}</b><span>${player.name}</span><strong>${fmt(player.score)}</strong>${status ? `<small>${status}</small>` : ''}</span>`;
   }).join('');
-  // Duplicate the list for a seamless, slow marquee. There are no per-item animations.
-  track.innerHTML = `<div class="tournament-ticker-set">${items}</div><div class="tournament-ticker-set" aria-hidden="true">${items}</div>`;
+
+  const mobile = window.matchMedia('(max-width: 650px)').matches;
+  track.innerHTML = mobile
+    ? `<div class="tournament-ticker-set">${items}</div>`
+    : `<div class="tournament-ticker-set">${items}</div><div class="tournament-ticker-set" aria-hidden="true">${items}</div>`;
+  track.classList.toggle('is-mobile-static', mobile);
 }
 
 function calculateHoleDelta(players) {
@@ -663,3 +672,12 @@ document.querySelector('#clearOverrides').onclick = () => { overrides = {}; loca
 render();
 refresh();
 setInterval(refresh, 60000);
+
+let tickerResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(tickerResizeTimer);
+  tickerResizeTimer = setTimeout(() => {
+    tournamentTickerSignature = '';
+    renderTournamentTicker();
+  }, 150);
+});
